@@ -58,7 +58,9 @@ const ENGINE_INFO = {
     keyHint: 'Su console.cloud.google.com attiva «Cloud Text-to-Speech API» e crea una chiave API (Credenziali).',
   },
 };
-const ENGINE_ORDER = ['piper', 'device', 'elevenlabs', 'openai', 'google'];
+// versione di prova ospitata dove la rete esterna è bloccata: solo voci del dispositivo
+const LIMITED = import.meta.env.VITE_LIMITED === '1';
+const ENGINE_ORDER = LIMITED ? ['device'] : ['piper', 'device', 'elevenlabs', 'openai', 'google'];
 
 const player = new Player({ settings: () => settings });
 const timer = new SleepTimer(player);
@@ -127,6 +129,10 @@ matchMedia('(prefers-color-scheme: dark)').addEventListener('change', applyAppea
 // ------------------------------------------------------------------ motore vocale
 
 async function chooseDefaultEngine() {
+  if (LIMITED) {
+    settings.engine = 'device';
+    return;
+  }
   if (settings.engine) return;
   // le voci di sistema di alta qualità (Edge Natural, Apple Premium) sono la scelta più immediata
   const voices = webSpeechSupported() ? await listItalianVoices() : [];
@@ -807,6 +813,10 @@ window.addEventListener('pagehide', () => saveProgress(true));
 // ------------------------------------------------------------------ avvio
 
 async function start() {
+  if (LIMITED) {
+    $('#limited-note').hidden = false;
+    $('[data-action="clear-piper"]').hidden = true;
+  }
   applyAppearance();
   setRate(settings.rate);
   await chooseDefaultEngine();
