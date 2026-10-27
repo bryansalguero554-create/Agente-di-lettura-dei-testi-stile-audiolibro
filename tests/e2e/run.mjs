@@ -321,8 +321,9 @@ async function main() {
     await page.click('#play-btn');
     await page.getByText('Scaricare la voce Paola?').waitFor();
     await page.screenshot({ path: join(out, '06-consenso-piper.png') });
+    // simuliamo una rete assente verso il server dei modelli: deve comparire un errore leggibile
+    await context.route('https://huggingface.co/**', (route) => route.abort('internetdisconnected'));
     await page.click('#confirm-ok');
-    // in questo ambiente huggingface.co non è raggiungibile: deve comparire un errore leggibile
     await page.locator('#toast', { hasText: /voce neurale|connessione/ }).waitFor({ timeout: 30000 });
     assert(await page.evaluate(() => window.__narratore.player.state) === 'paused', 'stato dopo errore');
   });
