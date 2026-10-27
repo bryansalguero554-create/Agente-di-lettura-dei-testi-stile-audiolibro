@@ -180,67 +180,6 @@ export class ElevenLabsEngine {
   }
 }
 
-// ---------------------------------------------------------------- Google Cloud
-
-const GOOGLE_RANK = [/Chirp3-HD/, /Chirp-HD/, /Studio/, /Neural2/, /Wavenet/, /Standard/];
-
-export class GoogleEngine {
-  kind = 'audio';
-  id = 'google';
-  label = 'Google Cloud (premium)';
-  #voices = null;
-  constructor(getKey) { this.getKey = getKey; }
-
-  async prepare() {
-    if (!this.getKey()) throw new Error('Inserisci la chiave API di Google Cloud nelle impostazioni.');
-  }
-
-  async voices() {
-    if (!this.getKey()) return [];
-    if (this.#voices) return this.#voices;
-    const res = await fetch(`https://texttospeech.googleapis.com/v1/voices?languageCode=it-IT&key=${encodeURIComponent(this.getKey())}`);
-    if (!res.ok) throw await apiError(res, 'Google');
-    const { voices = [] } = await res.json();
-    const rank = (n) => {
-      const i = GOOGLE_RANK.findIndex((re) => re.test(n));
-      return i === -1 ? 99 : i;
-    };
-    this.#voices = voices
-      .filter((v) => v.languageCodes.includes('it-IT'))
-      .sort((a, b) => rank(a.name) - rank(b.name) || a.name.localeCompare(b.name))
-      .map((v) => ({
-        id: v.name,
-        label: v.name.replace('it-IT-', ''),
-        badge: rank(v.name) <= 1 ? 'HD' : rank(v.name) <= 3 ? 'Neurale' : 'Standard',
-        hint: v.ssmlGender === 'FEMALE' ? 'Femminile' : v.ssmlGender === 'MALE' ? 'Maschile' : '',
-      }));
-    return this.#voices;
-  }
-
-  resetVoices() { this.#voices = null; }
-
-  bestVoiceId() { return this.#voices?.[0]?.id || 'it-IT-Chirp3-HD-Achernar'; }
-
-  synthesize(text, ctx = {}) {
-    return withRetry(async () => {
-      const res = await fetch(`https://texttospeech.googleapis.com/v1/text:synthesize?key=${encodeURIComponent(this.getKey())}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          input: { text },
-          voice: { languageCode: 'it-IT', name: ctx.voice || this.bestVoiceId() },
-          audioConfig: { audioEncoding: 'MP3' },
-        }),
-        signal: ctx.signal,
-      });
-      if (!res.ok) throw await apiError(res, 'Google');
-      const { audioContent } = await res.json();
-      const bytes = Uint8Array.from(atob(audioContent), (c) => c.charCodeAt(0));
-      return new Blob([bytes], { type: 'audio/mpeg' });
-    });
-  }
-}
-
 // ---------------------------------------------------------------- Gemini (Google AI Studio)
 
 export const GEMINI_MODELS = [

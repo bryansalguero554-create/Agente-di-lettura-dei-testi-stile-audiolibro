@@ -6,7 +6,7 @@ import { openFile, loadPdfjs } from './parsers/index.js';
 import { globalIndex, totalSentences, remainingChars } from './book.js';
 import { WebSpeechEngine, isSupported as webSpeechSupported, listItalianVoices } from './engines/webspeech.js';
 import { PiperEngine, PIPER_VOICES } from './engines/piper.js';
-import { OpenAIEngine, ElevenLabsEngine, GoogleEngine, GeminiEngine, ELEVEN_MODELS, GEMINI_MODELS } from './engines/cloud.js';
+import { OpenAIEngine, ElevenLabsEngine, GeminiEngine, ELEVEN_MODELS, GEMINI_MODELS } from './engines/cloud.js';
 import { normalizeForSpeech } from './text/normalize-it.js';
 
 const $ = (sel) => document.querySelector(sel);
@@ -22,7 +22,6 @@ const engines = {
   piper: new PiperEngine(),
   openai: new OpenAIEngine(() => settings.keys.openai),
   elevenlabs: new ElevenLabsEngine(() => settings.keys.elevenlabs, () => settings.elevenModel),
-  google: new GoogleEngine(() => settings.keys.google),
   gemini: new GeminiEngine(() => settings.keys.gemini, () => settings.geminiModel),
 };
 engines.gemini.onModelFallback = (model) => {
@@ -62,17 +61,10 @@ const ENGINE_INFO = {
     key: 'openai',
     keyHint: 'Crea la chiave su platform.openai.com › API keys. Costo indicativo: pochi centesimi per capitolo.',
   },
-  google: {
-    title: 'Google Cloud',
-    tags: [['Molto naturale'], ['A pagamento']],
-    text: 'Voci italiane Chirp 3 HD di Google, molto naturali e con un ampio piano gratuito mensile.',
-    key: 'google',
-    keyHint: 'Su console.cloud.google.com attiva «Cloud Text-to-Speech API» e crea una chiave API (Credenziali).',
-  },
 };
 // versione di prova ospitata dove la rete esterna è bloccata: solo voci del dispositivo
 const LIMITED = import.meta.env.VITE_LIMITED === '1';
-const ENGINE_ORDER = LIMITED ? ['device'] : ['gemini', 'piper', 'device', 'elevenlabs', 'openai', 'google'];
+const ENGINE_ORDER = LIMITED ? ['device'] : ['gemini', 'piper', 'device', 'elevenlabs', 'openai'];
 
 const player = new Player({ settings: () => settings });
 const timer = new SleepTimer(player);

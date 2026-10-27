@@ -14,7 +14,7 @@ export const DEFAULTS = {
   theme: 'auto',
   follow: true,
   viewMode: 'original', // 'original' = PDF/Word come appare; 'text' = solo testo
-  keys: { openai: '', elevenlabs: '', google: '', gemini: '' },
+  keys: { openai: '', elevenlabs: '', gemini: '' },
   elevenModel: 'eleven_multilingual_v2',
   geminiModel: 'gemini-3.8-flash-tts',
   piperConsent: false,
@@ -25,6 +25,8 @@ export function loadSettings() {
     const saved = JSON.parse(localStorage.getItem(KEY) || '{}');
     // chi aveva il vecchio modello predefinito passa al nuovo, più naturale
     if (saved.geminiModel === 'gemini-3.1-flash-tts-preview') saved.geminiModel = DEFAULTS.geminiModel;
+    // il motore Google Cloud è stato tolto: Gemini lo sostituisce
+    if (saved.engine === 'google') saved.engine = 'gemini';
     return { ...DEFAULTS, ...saved, keys: { ...DEFAULTS.keys, ...saved.keys } };
   } catch {
     return structuredClone(DEFAULTS);

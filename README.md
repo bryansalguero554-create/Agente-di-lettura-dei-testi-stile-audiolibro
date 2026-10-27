@@ -28,7 +28,6 @@ Narratore offre cinque motori vocali (Impostazioni ⚙️ › *Motore vocale*). 
 | **Gemini 3.8 Flash TTS** (Google AI Studio) | ★★★★★ | piano gratuito con limiti | La voce più naturale: modello Gemini 3.8 diretto come un narratore italiano; legge un paragrafo per richiesta, con intonazione continua. |
 | **ElevenLabs** | ★★★★★ | a pagamento | La voce più realistica, quella delle app di audiolibri professionali. Scegli una voce italiana dalla Voice Library di ElevenLabs. |
 | **OpenAI** | ★★★★½ | a pagamento | Le chiediamo di leggere come un narratore italiano madrelingua e di recitare i dialoghi. |
-| **Google Cloud** (Chirp 3 HD) | ★★★★½ | piano gratuito mensile ampio | Voci italiane HD molto naturali. |
 | **Paola** (neurale, offline) | ★★★½ | gratis | Voce neurale italiana che gira nel browser. Si scarica una volta (~64 MB), poi funziona senza internet. |
 | **Voci del dispositivo** | da ★★ a ★★★★ | gratis | Dipende dal sistema: vedi sotto. |
 
@@ -43,7 +42,6 @@ Narratore offre cinque motori vocali (Impostazioni ⚙️ › *Motore vocale*). 
 - **Gemini**: aistudio.google.com › *Get API key* (gratuita). Con il piano gratuito, se si raggiunge il limite di richieste al minuto, la lettura aspetta qualche secondo e riprende da sola.
 - **ElevenLabs**: elevenlabs.io › *Developers › API Keys*. Aggiungi alla tua libreria almeno una voce italiana (Voice Library, filtro lingua *Italiano*).
 - **OpenAI**: platform.openai.com › *API keys*.
-- **Google Cloud**: console.cloud.google.com › attiva *Cloud Text-to-Speech API* › *Credenziali › Crea chiave API*.
 
 La chiave si incolla in Impostazioni e resta salvata solo nel browser. Con i motori premium il testo del libro viene inviato al servizio scelto per generare l'audio.
 
@@ -86,7 +84,7 @@ src/
   engines/
     webspeech.js       voci del dispositivo (con classifica di naturalezza)
     piper.js           voce neurale offline in un Web Worker
-    cloud.js           Gemini, OpenAI, ElevenLabs, Google Cloud
+    cloud.js           Gemini, OpenAI, ElevenLabs
   views/
     align.js           trova ogni frase nel testo del documento originale
     pdf-view.js        pagine del PDF con la frase evidenziata
