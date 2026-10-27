@@ -1,0 +1,225 @@
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Narratore · audiolibri dai tuoi file</title>
+  <meta name="description" content="Trasforma PDF e documenti Word in audiolibri letti da una voce italiana naturale." />
+  <meta name="theme-color" content="#1c1712" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-title" content="Narratore" />
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="icon" href="icon.svg" type="image/svg+xml" />
+  <link rel="apple-touch-icon" href="icon-192.png" />
+  <link rel="stylesheet" href="/src/styles.css" />
+</head>
+<body>
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <symbol id="i-play" viewBox="0 0 24 24"><path d="M8 5.5v13a1 1 0 0 0 1.5.86l10.4-6.5a1 1 0 0 0 0-1.72L9.5 4.64A1 1 0 0 0 8 5.5z" fill="currentColor"/></symbol>
+    <symbol id="i-pause" viewBox="0 0 24 24"><rect x="6" y="5" width="4" height="14" rx="1.2" fill="currentColor"/><rect x="14" y="5" width="4" height="14" rx="1.2" fill="currentColor"/></symbol>
+    <symbol id="i-prev-ch" viewBox="0 0 24 24"><path d="M6 5v14M19 6l-9 6 9 6V6z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/></symbol>
+    <symbol id="i-next-ch" viewBox="0 0 24 24"><path d="M18 5v14M5 6l9 6-9 6V6z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/></symbol>
+    <symbol id="i-back-s" viewBox="0 0 24 24"><path d="M4 12a8 8 0 1 0 2.4-5.7M4 4v4h4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-fwd-s" viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-2.4-5.7M20 4v4h-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-list" viewBox="0 0 24 24"><path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+    <symbol id="i-bookmark" viewBox="0 0 24 24"><path d="M6 4h12v17l-6-4-6 4V4z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></symbol>
+    <symbol id="i-bookmark-add" viewBox="0 0 24 24"><path d="M6 4h12v17l-6-4-6 4V4zM12 8v6M9 11h6" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/></symbol>
+    <symbol id="i-gear" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="2"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z" fill="none" stroke="currentColor" stroke-width="1.6"/></symbol>
+    <symbol id="i-left" viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-moon" viewBox="0 0 24 24"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></symbol>
+    <symbol id="i-voice" viewBox="0 0 24 24"><path d="M12 3a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3zM5 11a7 7 0 0 0 14 0M12 18v3" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+    <symbol id="i-trash" viewBox="0 0 24 24"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/></symbol>
+    <symbol id="i-close" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></symbol>
+    <symbol id="i-upload" viewBox="0 0 24 24"><path d="M12 16V4M7 9l5-5 5 5M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  </svg>
+
+  <!-- ===================== LIBRERIA ===================== -->
+  <section id="library-view" class="view">
+    <header class="lib-header">
+      <div class="brand">
+        <img src="icon.svg" alt="" width="44" height="44" />
+        <div>
+          <h1>Narratore</h1>
+          <p>I tuoi PDF e documenti Word, letti come un audiolibro da una voce italiana.</p>
+        </div>
+      </div>
+      <button class="icon-btn" data-action="open-settings" aria-label="Impostazioni"><svg><use href="#i-gear"/></svg></button>
+    </header>
+
+    <label class="dropzone" id="dropzone">
+      <input type="file" id="file-input" accept=".pdf,.docx" hidden />
+      <svg class="dz-icon"><use href="#i-upload"/></svg>
+      <strong>Apri un file da ascoltare</strong>
+      <span>PDF o Word (.docx) · trascinalo qui oppure tocca per sceglierlo</span>
+    </label>
+
+    <div id="import-status" class="import-status" hidden>
+      <div class="spinner"></div><span id="import-label">Preparo il libro…</span>
+    </div>
+
+    <h2 class="section-title">La tua libreria</h2>
+    <ul id="book-list" class="book-list"></ul>
+    <p id="empty-library" class="empty">Nessun libro ancora. Apri un PDF o un documento Word per iniziare: il testo resta solo su questo dispositivo.</p>
+  </section>
+
+  <!-- ===================== LETTORE ===================== -->
+  <section id="reader-view" class="view" hidden>
+    <header class="reader-header">
+      <button class="icon-btn" data-action="close-book" aria-label="Torna alla libreria"><svg><use href="#i-left"/></svg></button>
+      <button class="title-btn" data-action="open-toc">
+        <span id="book-title" class="book-title"></span>
+        <span id="chapter-title" class="chapter-title"></span>
+      </button>
+      <button class="icon-btn" data-action="open-toc" aria-label="Capitoli"><svg><use href="#i-list"/></svg></button>
+      <button class="icon-btn" data-action="open-bookmarks" aria-label="Segnalibri"><svg><use href="#i-bookmark"/></svg></button>
+      <button class="icon-btn" data-action="open-settings" aria-label="Impostazioni"><svg><use href="#i-gear"/></svg></button>
+    </header>
+
+    <main id="text" class="reading" tabindex="-1"></main>
+    <button id="follow-btn" class="follow-btn" hidden>Torna alla frase in lettura</button>
+
+    <footer class="player">
+      <div class="progress-row">
+        <input type="range" id="seek" min="0" max="0" value="0" step="1" aria-label="Posizione nel capitolo" />
+        <div class="times"><span id="pos-label">—</span><span id="remaining-label"></span></div>
+      </div>
+      <div class="controls">
+        <button class="ctl" data-action="prev-chapter" aria-label="Capitolo precedente"><svg><use href="#i-prev-ch"/></svg></button>
+        <button class="ctl" data-action="prev-sentence" aria-label="Frase precedente"><svg><use href="#i-back-s"/></svg></button>
+        <button class="play" id="play-btn" data-action="toggle" aria-label="Leggi"><svg><use href="#i-play"/></svg><span class="loader"></span></button>
+        <button class="ctl" data-action="next-sentence" aria-label="Frase successiva"><svg><use href="#i-fwd-s"/></svg></button>
+        <button class="ctl" data-action="next-chapter" aria-label="Capitolo successivo"><svg><use href="#i-next-ch"/></svg></button>
+      </div>
+      <div class="extras">
+        <button class="pill" data-action="open-speed" id="speed-btn" aria-label="Velocità">1×</button>
+        <button class="pill" data-action="open-timer" id="timer-btn" aria-label="Timer di spegnimento"><svg><use href="#i-moon"/></svg><span id="timer-label">Timer</span></button>
+        <button class="pill" data-action="add-bookmark" aria-label="Aggiungi segnalibro"><svg><use href="#i-bookmark-add"/></svg><span>Segna</span></button>
+        <button class="pill" data-action="open-voice" id="voice-btn" aria-label="Voce"><svg><use href="#i-voice"/></svg><span id="voice-label">Voce</span></button>
+      </div>
+    </footer>
+  </section>
+
+  <!-- ===================== FINESTRE ===================== -->
+  <dialog id="toc-dialog" class="sheet">
+    <header><h3>Capitoli</h3><button class="icon-btn" data-close aria-label="Chiudi"><svg><use href="#i-close"/></svg></button></header>
+    <ol id="toc-list" class="toc-list"></ol>
+  </dialog>
+
+  <dialog id="bookmarks-dialog" class="sheet">
+    <header><h3>Segnalibri</h3><button class="icon-btn" data-close aria-label="Chiudi"><svg><use href="#i-close"/></svg></button></header>
+    <ul id="bookmark-list" class="bookmark-list"></ul>
+    <p id="no-bookmarks" class="empty">Nessun segnalibro. Tocca «Segna» durante l'ascolto per salvare il punto.</p>
+  </dialog>
+
+  <dialog id="speed-dialog" class="sheet small">
+    <header><h3>Velocità di lettura</h3><button class="icon-btn" data-close aria-label="Chiudi"><svg><use href="#i-close"/></svg></button></header>
+    <div class="speed-value"><span id="speed-value">1,00×</span></div>
+    <input type="range" id="speed-range" min="0.5" max="2" step="0.05" value="1" aria-label="Velocità" />
+    <div class="chips" id="speed-presets">
+      <button data-rate="0.75">0,75×</button><button data-rate="0.9">0,9×</button><button data-rate="1">1×</button>
+      <button data-rate="1.15">1,15×</button><button data-rate="1.25">1,25×</button><button data-rate="1.5">1,5×</button><button data-rate="2">2×</button>
+    </div>
+  </dialog>
+
+  <dialog id="timer-dialog" class="sheet small">
+    <header><h3>Timer di spegnimento</h3><button class="icon-btn" data-close aria-label="Chiudi"><svg><use href="#i-close"/></svg></button></header>
+    <p class="hint">La lettura si ferma con una dolce dissolvenza. In pausa il timer si ferma.</p>
+    <div class="chips" id="timer-options">
+      <button data-min="5">5 min</button><button data-min="10">10 min</button><button data-min="15">15 min</button>
+      <button data-min="30">30 min</button><button data-min="45">45 min</button><button data-min="60">1 ora</button>
+      <button data-min="chapter">Fine capitolo</button>
+    </div>
+    <div class="timer-active" id="timer-active" hidden>
+      <span id="timer-remaining"></span>
+      <button class="btn secondary" data-action="timer-extend">+5 min</button>
+      <button class="btn secondary" data-action="timer-cancel">Disattiva</button>
+    </div>
+  </dialog>
+
+  <dialog id="settings-dialog" class="sheet tall">
+    <header><h3>Voce e lettura</h3><button class="icon-btn" data-close aria-label="Chiudi"><svg><use href="#i-close"/></svg></button></header>
+    <div class="settings-body">
+      <section>
+        <h4>Motore vocale</h4>
+        <div id="engine-list" class="engine-list"></div>
+      </section>
+
+      <section id="key-section" hidden>
+        <h4 id="key-title">Chiave API</h4>
+        <p class="hint" id="key-hint"></p>
+        <div class="row">
+          <input type="password" id="api-key" autocomplete="off" spellcheck="false" placeholder="Incolla qui la chiave" />
+          <button class="btn secondary" data-action="save-key">Salva</button>
+        </div>
+        <label class="field" id="eleven-model-field" hidden>Modello
+          <select id="eleven-model"></select>
+        </label>
+      </section>
+
+      <section>
+        <h4>Voce narrante</h4>
+        <div class="row">
+          <select id="voice-select" aria-label="Voce narrante"></select>
+          <button class="btn secondary" data-action="test-voice">Prova</button>
+        </div>
+        <p class="hint" id="voice-hint"></p>
+      </section>
+
+      <section>
+        <label class="switch"><input type="checkbox" id="dialogue-toggle" /><span>Voce diversa per i dialoghi</span></label>
+        <p class="hint">Le battute tra virgolette o introdotte da trattino vengono lette da una seconda voce, come in un audiolibro recitato.</p>
+        <div class="row" id="dialogue-row" hidden>
+          <select id="dialogue-voice-select" aria-label="Voce dei dialoghi"></select>
+          <button class="btn secondary" data-action="test-dialogue">Prova</button>
+        </div>
+      </section>
+
+      <section>
+        <h4>Interpretazione</h4>
+        <label class="field">Ritmo delle pause
+          <select id="pace-select">
+            <option value="compatto">Compatto</option>
+            <option value="naturale">Naturale</option>
+            <option value="disteso">Disteso, da racconto</option>
+          </select>
+        </label>
+        <label class="switch"><input type="checkbox" id="announce-toggle" /><span>Leggi i titoli dei capitoli</span></label>
+      </section>
+
+      <section>
+        <h4>Aspetto</h4>
+        <label class="field">Dimensione del testo
+          <input type="range" id="font-range" min="15" max="28" step="1" />
+        </label>
+        <label class="field">Tema
+          <select id="theme-select">
+            <option value="auto">Automatico</option>
+            <option value="light">Carta</option>
+            <option value="sepia">Seppia</option>
+            <option value="dark">Notte</option>
+          </select>
+        </label>
+        <label class="switch"><input type="checkbox" id="follow-toggle" /><span>Scorri il testo seguendo la lettura</span></label>
+      </section>
+
+      <section class="about">
+        <p class="hint">I file, la libreria e le chiavi API restano su questo dispositivo. Con i motori premium il testo letto viene inviato al servizio scelto.</p>
+        <button class="btn link" data-action="clear-piper">Elimina le voci neurali scaricate</button>
+      </section>
+    </div>
+  </dialog>
+
+  <dialog id="confirm-dialog" class="sheet small">
+    <header><h3 id="confirm-title"></h3></header>
+    <p id="confirm-text" class="confirm-text"></p>
+    <div class="row end">
+      <button class="btn secondary" value="cancel" id="confirm-cancel">Annulla</button>
+      <button class="btn" value="ok" id="confirm-ok">Continua</button>
+    </div>
+  </dialog>
+
+  <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>

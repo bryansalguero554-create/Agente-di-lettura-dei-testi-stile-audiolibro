@@ -1,0 +1,36 @@
+{
+  "name": "narratore-audiolibri",
+  "version": "1.0.0",
+  "description": "Lettore di PDF e Word in stile audiolibro con voce italiana naturale",
+  "scripts": {
+    "predev": "node scripts/copy-vendor.mjs",
+    "dev": "vite",
+    "prebuild": "node scripts/copy-vendor.mjs",
+    "build": "vite build",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "test:e2e": "node tests/e2e/run.mjs"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/bryansalguero554-create/Agente-di-lettura-dei-testi-stile-audiolibro.git"
+  },
+  "bugs": {
+    "url": "https://github.com/bryansalguero554-create/Agente-di-lettura-dei-testi-stile-audiolibro/issues"
+  },
+  "homepage": "https://github.com/bryansalguero554-create/Agente-di-lettura-dei-testi-stile-audiolibro#readme",
+  "dependencies": {
+    "@diffusionstudio/piper-wasm": "^1.0.0",
+    "@mintplex-labs/piper-tts-web": "^1.0.5",
+    "mammoth": "^1.13.0",
+    "pdfjs-dist": "^4.10.38"
+  },
+  "devDependencies": {
+    "docx": "^9.15.0",
+    "happy-dom": "^21.0.4",
+    "vite": "^8.3.5",
+    "vitest": "^5.0.5"
+  },
+  "private": true,
+  "type": "module"
+}
