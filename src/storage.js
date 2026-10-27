@@ -19,7 +19,14 @@ function open() {
         s.createIndex('bookId', 'bookId');
       }
     };
-    req.onsuccess = () => resolve(req.result);
+    req.onsuccess = () => {
+      const db = req.result;
+      // se un'altra scheda apre una versione più nuova dell'app, liberiamo il database
+      db.onversionchange = () => db.close();
+      resolve(db);
+    };
+    // una scheda aperta con la versione precedente blocca l'aggiornamento
+    req.onblocked = () => reject(new Error('Chiudi le altre schede di Narratore e ricarica la pagina.'));
     req.onerror = () => reject(req.error);
   });
   return dbPromise;

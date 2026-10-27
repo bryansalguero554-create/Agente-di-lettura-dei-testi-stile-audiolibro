@@ -1,5 +1,5 @@
 // Service worker: rende l'app disponibile anche offline dopo la prima visita.
-const CACHE = 'narratore-v1';
+const CACHE = 'narratore-v2';
 
 self.addEventListener('install', () => self.skipWaiting());
 self.addEventListener('activate', (event) => {

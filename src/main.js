@@ -905,7 +905,11 @@ async function start() {
   await chooseDefaultEngine();
   player.setEngine(currentEngine());
   refreshVoiceLabel();
-  await renderLibrary();
+  try {
+    await renderLibrary();
+  } catch (err) {
+    toast(err.message || 'Non riesco ad aprire la libreria salvata.', 8000);
+  }
   if (import.meta.env.PROD && 'serviceWorker' in navigator) {
     navigator.serviceWorker.register('sw.js').catch(() => {});
   }
