@@ -626,6 +626,7 @@ function renderEngines() {
 }
 
 async function selectEngine(id) {
+  engines[id].resetModel?.(); // scegliendolo di nuovo si riprova anche se prima non era disponibile
   settings.engine = id;
   persist();
   player.setEngine(currentEngine());
@@ -714,7 +715,18 @@ async function testVoice(dialogue = false) {
 
 player.addEventListener('position', updatePosition);
 player.addEventListener('state', updatePlayButton);
-player.addEventListener('error', ({ detail }) => toast(detail.message, 7000));
+player.addEventListener('error', async ({ detail }) => {
+  // Gemini non disponibile per la chiave: si continua con una voce gratuita invece di fermarsi
+  if (detail.code === 'gemini-unavailable' && settings.engine === 'gemini') {
+    const voices = webSpeechSupported() ? await listItalianVoices() : [];
+    const next = voices[0]?.score >= 40 || (!settings.piperConsent && voices.length) ? 'device' : 'piper';
+    await selectEngine(next);
+    toast(`${detail.message} Intanto continuo con «${ENGINE_INFO[next].title}».`, 10000);
+    togglePlay();
+    return;
+  }
+  toast(detail.message, 7000);
+});
 player.addEventListener('bookend', () => toast('Fine del libro. Grazie per l\'ascolto!', 5000));
 
 document.addEventListener('click', (e) => {
@@ -749,6 +761,7 @@ document.addEventListener('click', (e) => {
       settings.keys[info.key] = $('#api-key').value.trim();
       persist();
       currentEngine().resetVoices?.();
+      currentEngine().resetModel?.();
       toast(settings.keys[info.key] ? 'Chiave salvata su questo dispositivo' : 'Chiave rimossa');
       renderEngines();
       await renderVoiceControls();

@@ -184,11 +184,11 @@ export class ElevenLabsEngine {
 
 export const GEMINI_MODELS = [
   ['gemini-3.8-flash-tts', 'Gemini 3.8 Flash TTS · la più naturale'],
-  ['gemini-3.8-flash-lite-tts', 'Gemini 3.8 Flash-Lite TTS · più veloce ed economica'],
-  ['gemini-3.1-flash-tts-preview', 'Gemini 3.1 Flash TTS (anteprima)'],
-  ['gemini-2.5-pro-preview-tts', 'Gemini 2.5 Pro TTS · massima qualità'],
-  ['gemini-2.5-flash-preview-tts', 'Gemini 2.5 Flash TTS · veloce'],
-];
+  ['gemini-3.8-flash-lite-tts', 'Gemini 3.8 Flash-Lite TTS · veloce'],
+  ['gemini-3.1-flash-tts-preview', 'Gemini 3.1 Flash TTS'],
+  ['gemini-2.5-flash-preview-tts', 'Gemini 2.5 Flash TTS'],
+  ['gemini-2.5-pro-preview-tts', 'Gemini 2.5 Pro TTS'],
+]
 
 const GEMINI_VOICES = [
   ['Sulafat', 'Femminile, calda'], ['Charon', 'Maschile, narrativa'], ['Kore', 'Femminile, decisa'],
@@ -203,19 +203,6 @@ const GEMINI_VOICES = [
   ['Fenrir', 'Maschile, energica'], ['Zubenelgenubi', 'Maschile, informale'], ['Sadachbia', 'Maschile, vivace'],
 ];
 
-/**
- * Regia per Gemini. Va nelle istruzioni di sistema, separata dal testo, perché messa
- * nel testo il modello a volte la leggeva ad alta voce.
- */
-export function geminiDirection(ctx = {}) {
-  let style = 'Sei la voce di un audiolibro. Pronuncia ad alta voce SOLO il testo che ricevi, parola per parola, '
-    + 'senza aggiungere, commentare o leggere queste istruzioni. Parla in italiano con accento italiano madrelingua e '
-    + 'pronuncia standard, come un narratore professionista: tono caldo e coinvolgente, ritmo calmo, pause naturali alla punteggiatura';
-  if (ctx.heading) style += '. Il testo è il titolo di un capitolo: annuncialo con calma';
-  if (ctx.dialogue) style += '. Interpreta i dialoghi come un attore, con l\'emozione suggerita dal contenuto ma senza esagerare';
-  return `${style}.`;
-}
-
 /** Avvolge il PCM 16 bit restituito da Gemini in un file WAV riproducibile. */
 export function pcmToWav(bytes, sampleRate = 24000) {
   const header = new DataView(new ArrayBuffer(44));
@@ -228,14 +215,30 @@ export function pcmToWav(bytes, sampleRate = 24000) {
 }
 
 // risposte di Google per i modelli non inclusi nel piano gratuito
-const GEMINI_PAID_ONLY = /limit:\s*0\b|free[_ -]?tier|billing|paid (tier|plan|account)|requires? (a )?paid|not available (on|for) (the )?free/i;
+const GEMINI_PAID_ONLY = /limit:\s*0\b|billing|paid (tier|plan|account)|requires? (a )?paid|not available (on|for) (the )?free/i;
+const EXHAUSTED_KEY = 'narratore.gemini.esauriti';
+const today = () => new Date().toISOString().slice(0, 10);
+
+function loadExhausted() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(EXHAUSTED_KEY) || '{}');
+    return new Map(Object.entries(saved).filter(([, day]) => day === today()));
+  } catch {
+    return new Map();
+  }
+}
 
 export class GeminiEngine {
   kind = 'audio';
   id = 'gemini';
   label = 'Gemini (Google AI Studio)';
-  // più frasi per richiesta: il piano gratuito ha pochi messaggi al minuto
-  groupChars = 900;
+  // il piano gratuito conta le richieste: si leggono blocchi lunghi, anche di più paragrafi,
+  // con un primo blocco breve per partire subito
+  groupChars = 3200;
+  firstGroupChars = 450;
+  groupAcrossParagraphs = true;
+  #exhausted = loadExhausted(); // modelli che oggi hanno finito le richieste gratuite
+
   constructor(getKey, getModel) { this.getKey = getKey; this.getModel = getModel; }
 
   async voices() {
@@ -248,39 +251,58 @@ export class GeminiEngine {
     if (!this.getKey()) throw new Error('Inserisci la chiave API di Gemini (Google AI Studio) nelle impostazioni.');
   }
 
+  #markExhausted(model) {
+    this.#exhausted.set(model, today());
+    try {
+      localStorage.setItem(EXHAUSTED_KEY, JSON.stringify(Object.fromEntries(this.#exhausted)));
+    } catch { /* archiviazione non disponibile */ }
+  }
+
   async synthesize(text, ctx = {}) {
-    // se il modello scelto non è disponibile per questa chiave si prova il successivo
+    // già verificato che nessun modello è disponibile: si evita di riprovarli tutti a ogni blocco
+    if (this.unavailable) throw this.unavailable;
     const chosen = this.workingModel || this.getModel() || GEMINI_MODELS[0][0];
-    const candidates = [chosen, ...GEMINI_MODELS.map(([id]) => id).filter((id) => id !== chosen)];
+    const candidates = [chosen, ...GEMINI_MODELS.map(([id]) => id).filter((id) => id !== chosen)]
+      .filter((id) => !this.#exhausted.has(id));
     let lastError;
-    let paidOnly = false;
+    let reason = this.#exhausted.size ? 'daily' : null;
     for (const model of candidates) {
       try {
         const blob = await this.#synthesizeWith(model, text, ctx);
-        if (this.workingModel !== model && model !== chosen) this.onModelFallback?.(model, chosen);
+        if (this.workingModel !== model && model !== (this.getModel() || GEMINI_MODELS[0][0])) this.onModelFallback?.(model);
         this.workingModel = model;
         return blob;
       } catch (err) {
         if (!err.modelUnavailable) throw err;
-        paidOnly ||= !!err.paidOnly;
+        if (err.daily) this.#markExhausted(model);
+        reason = err.daily ? 'daily' : reason || (err.paidOnly ? 'paid' : null);
         lastError = err;
+        if (this.workingModel === model) this.workingModel = null;
       }
     }
-    if (paidOnly) {
-      throw new Error('Gemini: con questa chiave gratuita nessuna voce Gemini è disponibile. Attiva la fatturazione su aistudio.google.com (pochi centesimi per capitolo) oppure usa la voce gratuita Paola.');
-    }
-    throw lastError;
+    const message = {
+      daily: 'Per oggi sono finite le letture gratuite delle voci Gemini della tua chiave: si azzerano domani. Con la fatturazione attiva su aistudio.google.com non ci sono questi limiti.',
+      paid: 'Le voci Gemini non sono incluse nella tua chiave API: il piano gratuito non le comprende e l\'abbonamento Google AI Pro non vale per le API. Per usarle attiva la fatturazione su aistudio.google.com.',
+    }[reason];
+    const err = message ? new Error(message) : lastError || new Error('Gemini non è disponibile in questo momento.');
+    err.code = 'gemini-unavailable';
+    this.unavailable = err;
+    throw err;
   }
 
-  resetModel() { this.workingModel = null; }
+  resetModel() {
+    this.workingModel = null;
+    this.unavailable = null;
+  }
 
   #synthesizeWith(model, text, ctx) {
     return withRetry(async () => {
+      // solo il testo del libro: questi modelli non accettano istruzioni separate e,
+      // se messe nel testo, a volte le leggono ad alta voce
       const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'x-goog-api-key': this.getKey() },
         body: JSON.stringify({
-          ...(this.noDirection ? {} : { systemInstruction: { parts: [{ text: geminiDirection(ctx) }] } }),
           contents: [{ role: 'user', parts: [{ text }] }],
           generationConfig: {
             responseModalities: ['AUDIO'],
@@ -290,35 +312,29 @@ export class GeminiEngine {
         signal: ctx.signal,
       });
       const body = res.ok ? '' : await res.clone().text();
-      // alcuni modelli vocali non accettano istruzioni di sistema: si legge il testo e basta
-      if (res.status === 400 && !this.noDirection && /system|instruction/i.test(body)) {
-        this.noDirection = true;
-        return this.#synthesizeWith(model, text, ctx);
+      const unavailable = (message, extra = {}) => Object.assign(new Error(message), { modelUnavailable: true, ...extra });
+      if (res.status === 429) {
+        const delay = Number(res.headers.get('retry-after')) || Number(body.match(/"retryDelay":\s*"(\d+)/)?.[1]) || 20;
+        if (GEMINI_PAID_ONLY.test(body)) throw unavailable(`Gemini: ${model} non è incluso nel piano gratuito.`, { paidOnly: true });
+        // limite giornaliero o attesa troppo lunga: si passa subito al modello successivo
+        if (/PerDay/i.test(body) || delay > 90) throw unavailable(`Gemini: richieste gratuite di oggi finite per ${model}.`, { daily: true });
+        if ((ctx.attempt || 0) < 3) {
+          // limite al minuto: si attende qualche secondo e si riprova
+          await new Promise((r) => setTimeout(r, delay * 1000));
+          return this.#synthesizeWith(model, text, { ...ctx, attempt: (ctx.attempt || 0) + 1 });
+        }
       }
-      // modello escluso dal piano gratuito (quota zero o fatturazione richiesta): si passa al successivo
-      if ([400, 403, 429].includes(res.status) && GEMINI_PAID_ONLY.test(body)) {
-        const err = new Error(`Gemini: il modello ${model} richiede una chiave con fatturazione attiva.`);
-        err.modelUnavailable = true;
-        err.paidOnly = true;
-        throw err;
-      }
-      if (res.status === 429 && (ctx.attempt || 0) < 3) {
-        // piano gratuito: si attende che si liberi la quota al minuto e si riprova
-        const wait = Number(res.headers.get('retry-after')) || Number(body.match(/"retryDelay":\s*"(\d+)/)?.[1]) || 20;
-        await new Promise((r) => setTimeout(r, wait * 1000));
-        return this.#synthesizeWith(model, text, { ...ctx, attempt: (ctx.attempt || 0) + 1 });
-      }
-      if (res.status === 404) {
-        const err = new Error(`Gemini: nessun modello vocale disponibile per questa chiave (ultimo provato: ${model}).`);
-        err.modelUnavailable = true;
-        throw err;
-      }
+      if ([400, 403].includes(res.status) && GEMINI_PAID_ONLY.test(body)) throw unavailable(`Gemini: ${model} richiede la fatturazione.`, { paidOnly: true });
+      if (res.status === 404 || res.status >= 500) throw unavailable(`Gemini: ${model} non risponde (errore ${res.status}).`);
       if (!res.ok) throw await apiError(res, 'Gemini');
       const json = await res.json();
       const part = json.candidates?.[0]?.content?.parts?.find((p) => p.inlineData?.data);
-      if (!part) throw new Error('Gemini non ha restituito audio per questo passaggio. Riprova o scegli un altro modello.');
-      const rate = Number((part.inlineData.mimeType || '').match(/rate=(\d+)/)?.[1]) || 24000;
+      if (!part) throw unavailable('Gemini non ha restituito audio per questo passaggio.');
+      const mime = (part.inlineData.mimeType || '').toLowerCase();
       const bytes = Uint8Array.from(atob(part.inlineData.data), (c) => c.charCodeAt(0));
+      // alcuni modelli restituiscono già un file audio (WAV/MP3), altri PCM grezzo
+      if (/wav|mpeg|mp3|ogg/.test(mime)) return new Blob([bytes], { type: mime.split(';')[0] });
+      const rate = Number(mime.match(/rate=(\d+)/)?.[1]) || 24000;
       return pcmToWav(bytes, rate);
     });
   }

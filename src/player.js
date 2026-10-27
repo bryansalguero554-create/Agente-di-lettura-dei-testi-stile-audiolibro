@@ -64,6 +64,7 @@ export class Player extends EventTarget {
   #audio;
   #keepAlive;
   #playbackDone = null;
+  #warm = false;
 
   /** @param {{ settings: () => any }} opts */
   constructor({ settings }) {
@@ -148,30 +149,32 @@ export class Player extends EventTarget {
    * Ultima frase del gruppo che inizia da `start`. I motori con `groupChars` leggono più
    * frasi dello stesso paragrafo in una sola richiesta: meno chiamate e intonazione più continua.
    */
-  groupEnd(chapter, start) {
+  groupEnd(chapter, start, limit = this.#engine?.groupChars || 0) {
     const sentences = this.book.chapters[chapter].sentences;
     const first = sentences[start];
-    const limit = this.#engine?.groupChars || 0;
+    const across = this.#engine?.groupAcrossParagraphs;
     let end = start;
     if (!limit || first.heading) return end;
     let chars = first.text.length;
     while (end + 1 < sentences.length) {
       const next = sentences[end + 1];
-      if (next.heading || next.paragraph !== first.paragraph || chars + next.text.length + 1 > limit) break;
+      if (next.heading || (!across && next.paragraph !== first.paragraph) || chars + next.text.length + 1 > limit) break;
       end++;
       chars += next.text.length + 1;
     }
     return end;
   }
 
-  #units(chapter, index) {
-    const end = this.groupEnd(chapter, index);
+  #units(chapter, index, limit) {
+    const end = this.groupEnd(chapter, index, limit);
     if (end > index) {
       const group = this.book.chapters[chapter].sentences.slice(index, end + 1);
       const spoken = group.map((x) => normalizeForSpeech(x.text));
+      // tra un paragrafo e l'altro una riga vuota: il narratore fa la pausa giusta
+      const joined = spoken.map((x, k) => (k && group[k].paragraph !== group[k - 1].paragraph ? `\n\n${x}` : x)).join(' ');
       return [{
         text: group.map((x) => x.text).join(' '),
-        spoken: spoken.join(' '),
+        spoken: joined,
         // il peso di ogni frase serve a evidenziarla mentre l'audio scorre
         weights: spoken.map((x) => x.length + 1),
         end,
@@ -231,6 +234,7 @@ export class Player extends EventTarget {
     if (this.state === 'playing' || this.state === 'loading') return;
     const runId = ++this.#runId;
     this.#setState('loading');
+    this.#warm = false;
     if (this.#engine.kind === 'audio') this.#unlockAudio();
     try {
       await this.#engine.prepare(this.#settings().voices?.[this.#engine.id]);
@@ -267,7 +271,10 @@ export class Player extends EventTarget {
       const skip = s.heading && settings.announceChapters === false;
       try {
         if (!skip) {
-          const units = this.#units(chapter, sentence);
+          // il primo blocco dopo l'avvio è breve, per sentire subito la voce
+          const first = this.#engine.firstGroupChars && !this.#warm ? this.#engine.firstGroupChars : undefined;
+          this.#warm = true;
+          const units = this.#units(chapter, sentence, first);
           if (this.#engine.kind === 'audio') {
             const urls = units.map((u, k) => this.#audioFor(chapter, sentence, k, u));
             this.#prefetch(chapter, sentence);
@@ -359,7 +366,7 @@ export class Player extends EventTarget {
     this.#runId++;
     this.#stopOutput();
     this.#setState('paused');
-    this.#emit('error', { message: err?.message || String(err) });
+    this.#emit('error', { message: err?.message || String(err), code: err?.code });
   }
 
   #stopOutput() {

@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { squash, buildStream, alignBook, sentenceAtPosition } from '../src/views/align.js';
 import { mergeLines } from '../src/views/pdf-view.js';
 import { buildBook } from '../src/book.js';
-import { geminiDirection, pcmToWav, GEMINI_MODELS } from '../src/engines/cloud.js';
+import { pcmToWav, GEMINI_MODELS } from '../src/engines/cloud.js';
 import { Player } from '../src/player.js';
 
 describe('allineamento con il documento originale', () => {
@@ -42,28 +42,36 @@ describe('allineamento con il documento originale', () => {
 });
 
 describe('Gemini', () => {
-  it('dà la regia separata dal testo da leggere', async () => {
-    const d = geminiDirection({ dialogue: true });
-    expect(d).toMatch(/accento italiano madrelingua/);
-    expect(d).toMatch(/dialoghi/);
-    expect(GEMINI_MODELS[0][0]).toMatch(/tts/);
+  it('invia a Gemini solo il testo del libro e accetta audio WAV o PCM', async () => {
+    expect(GEMINI_MODELS[0][0]).toBe('gemini-3.8-flash-tts');
     const { GeminiEngine } = await import('../src/engines/cloud.js');
     const bodies = [];
-    const pcm = btoa(String.fromCharCode(...new Uint8Array(48)));
+    const wav = btoa('RIFF' + 'x'.repeat(40));
     globalThis.fetch = async (url, opts) => {
-      const body = JSON.parse(opts.body);
-      bodies.push(body);
-      if (body.systemInstruction) return new Response('{"error":{"message":"Developer instruction is not enabled"}}', { status: 400 });
-      return new Response(JSON.stringify({ candidates: [{ content: { parts: [{ inlineData: { mimeType: 'audio/L16;rate=24000', data: pcm } }] } }] }));
+      bodies.push(JSON.parse(opts.body));
+      return new Response(JSON.stringify({ candidates: [{ content: { parts: [{ inlineData: { mimeType: 'audio/wav', data: wav } }] } }] }));
     };
-    const engine = new GeminiEngine(() => 'k', () => undefined);
-    await engine.synthesize('Era notte.');
-    // il testo letto è solo quello del libro
+    const blob = await new GeminiEngine(() => 'k', () => undefined).synthesize('Era notte.');
     expect(bodies[0].contents[0].parts[0].text).toBe('Era notte.');
-    expect(bodies[0].systemInstruction.parts[0].text).toMatch(/narratore/);
-    // il modello non accetta istruzioni: riprova con il solo testo
-    expect(bodies[1].systemInstruction).toBeUndefined();
-    expect(bodies[1].contents[0].parts[0].text).toBe('Era notte.');
+    expect(bodies[0].systemInstruction).toBeUndefined();
+    expect(blob.size).toBe(44); // il WAV di Gemini non viene avvolto una seconda volta
+  });
+
+  it('con il limite giornaliero esaurito passa subito al modello successivo', async () => {
+    const { GeminiEngine } = await import('../src/engines/cloud.js');
+    const calls = [];
+    const pcm = btoa(String.fromCharCode(...new Uint8Array(48)));
+    globalThis.fetch = async (url) => {
+      calls.push(url.match(/models\/([^:]+)/)[1]);
+      if (calls.length === 1) {
+        return new Response(JSON.stringify({ error: { code: 429, message: 'Quota exceeded, limit: 10', details: [{ quotaId: 'GenerateRequestsPerDayPerProjectPerModel-FreeTier' }, { retryDelay: '32452s' }] } }), { status: 429 });
+      }
+      return new Response(JSON.stringify({ candidates: [{ content: { parts: [{ inlineData: { mimeType: 'audio/l16; rate=24000', data: pcm } }] } }] }));
+    };
+    const started = Date.now();
+    await new GeminiEngine(() => 'k', () => undefined).synthesize('Ciao.');
+    expect(Date.now() - started).toBeLessThan(2000);
+    expect(calls).toEqual(['gemini-3.8-flash-tts', 'gemini-3.8-flash-lite-tts']);
   });
 
   it('trasforma il PCM in WAV', async () => {
@@ -90,6 +98,10 @@ describe('lettura a paragrafi', () => {
     expect(player.groupEnd(0, 2)).toBe(3);
     player.setEngine({ kind: 'audio', id: 'gemini', groupChars: 20 });
     expect(player.groupEnd(0, 1)).toBe(1);
+    // Gemini: blocchi che attraversano i paragrafi
+    player.setEngine({ kind: 'audio', id: 'gemini', groupChars: 900, groupAcrossParagraphs: true });
+    expect(player.groupEnd(0, 1)).toBe(4);
+    expect(player.groupEnd(0, 1, 20)).toBe(1);
   });
 });
 

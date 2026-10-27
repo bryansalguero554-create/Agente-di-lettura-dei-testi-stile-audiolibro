@@ -343,6 +343,26 @@ async function main() {
     await page.locator('#toast', { hasText: 'chiave API non valida' }).waitFor({ timeout: 10000 });
   });
 
+  console.log('\nGemini con chiave gratuita');
+  await step('se Gemini non è incluso nella chiave continua con una voce gratuita', async () => {
+    await context.route('https://generativelanguage.googleapis.com/**', (route) => route.fulfill({
+      status: 429, contentType: 'application/json', headers: { 'access-control-allow-origin': '*' },
+      body: JSON.stringify({ error: { code: 429, message: 'Quota exceeded for metric: generate_content_free_tier_requests, limit: 0' } }),
+    }));
+    await page.click('[aria-label="Impostazioni"] >> nth=1');
+    await page.locator('.engine', { hasText: 'Gemini' }).click();
+    await page.fill('#api-key', 'chiave-gratuita');
+    await page.click('[data-action="save-key"]');
+    await page.keyboard.press('Escape');
+    await page.evaluate(() => { window.__spoken.length = 0; window.__narratore.player.seek(0, 0); });
+    await page.click('#play-btn');
+    await page.locator('#toast', { hasText: 'non sono incluse nella tua chiave' }).waitFor({ timeout: 15000 });
+    await page.waitForFunction(() => window.__spoken.length > 0, null, { timeout: 15000 });
+    const engine = await page.evaluate(() => window.__narratore.settings.engine);
+    assert(engine === 'device', `motore dopo il ripiego: ${engine}`);
+    await page.evaluate(() => window.__narratore.player.pause());
+  });
+
   console.log('\nVoce neurale offline (Piper)');
   await step('chiede il consenso al download e gestisce la rete non disponibile', async () => {
     await page.click('[aria-label="Impostazioni"] >> nth=1');
@@ -382,7 +402,7 @@ async function main() {
   });
 
   await step('nessun errore JavaScript inatteso', async () => {
-    const unexpected = errors.filter((e) => !/huggingface|Failed to fetch|ERR_|401|net::|voce neurale/i.test(e));
+    const unexpected = errors.filter((e) => !/huggingface|Failed to fetch|ERR_|401|429|net::|voce neurale/i.test(e));
     assert(!unexpected.length, unexpected.join('\n'));
   });
 
