@@ -284,6 +284,9 @@ export function pcmToWav(bytes, sampleRate = 24000) {
   return new Blob([header.buffer, bytes], { type: 'audio/wav' });
 }
 
+// risposte di Google per i modelli non inclusi nel piano gratuito
+const GEMINI_PAID_ONLY = /limit:\s*0\b|free[_ -]?tier|billing|paid (tier|plan|account)|requires? (a )?paid|not available (on|for) (the )?free/i;
+
 export class GeminiEngine {
   kind = 'audio';
   id = 'gemini';
@@ -307,15 +310,21 @@ export class GeminiEngine {
     const chosen = this.workingModel || this.getModel() || GEMINI_MODELS[0][0];
     const candidates = [chosen, ...GEMINI_MODELS.map(([id]) => id).filter((id) => id !== chosen)];
     let lastError;
+    let paidOnly = false;
     for (const model of candidates) {
       try {
         const blob = await this.#synthesizeWith(model, text, ctx);
+        if (this.workingModel !== model && model !== chosen) this.onModelFallback?.(model, chosen);
         this.workingModel = model;
         return blob;
       } catch (err) {
         if (!err.modelUnavailable) throw err;
+        paidOnly ||= !!err.paidOnly;
         lastError = err;
       }
+    }
+    if (paidOnly) {
+      throw new Error('Gemini: con questa chiave gratuita nessuna voce Gemini è disponibile. Attiva la fatturazione su aistudio.google.com (pochi centesimi per capitolo) oppure usa la voce gratuita Paola.');
     }
     throw lastError;
   }
@@ -336,9 +345,17 @@ export class GeminiEngine {
         }),
         signal: ctx.signal,
       });
+      const body = res.ok ? '' : await res.clone().text();
+      // modello escluso dal piano gratuito (quota zero o fatturazione richiesta): si passa al successivo
+      if ([400, 403, 429].includes(res.status) && GEMINI_PAID_ONLY.test(body)) {
+        const err = new Error(`Gemini: il modello ${model} richiede una chiave con fatturazione attiva.`);
+        err.modelUnavailable = true;
+        err.paidOnly = true;
+        throw err;
+      }
       if (res.status === 429 && (ctx.attempt || 0) < 3) {
         // piano gratuito: si attende che si liberi la quota al minuto e si riprova
-        const wait = Number(res.headers.get('retry-after')) || 20;
+        const wait = Number(res.headers.get('retry-after')) || Number(body.match(/"retryDelay":\s*"(\d+)/)?.[1]) || 20;
         await new Promise((r) => setTimeout(r, wait * 1000));
         return this.#synthesizeWith(model, text, { ...ctx, attempt: (ctx.attempt || 0) + 1 });
       }

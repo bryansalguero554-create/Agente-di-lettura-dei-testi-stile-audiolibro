@@ -25,6 +25,10 @@ const engines = {
   google: new GoogleEngine(() => settings.keys.google),
   gemini: new GeminiEngine(() => settings.keys.gemini, () => settings.geminiModel),
 };
+engines.gemini.onModelFallback = (model) => {
+  const label = GEMINI_MODELS.find(([id]) => id === model)?.[1] || model;
+  toast(`Il modello scelto non è incluso nella tua chiave Gemini: uso ${label}.`, 6000);
+};
 
 const ENGINE_INFO = {
   piper: {
@@ -39,10 +43,10 @@ const ENGINE_INFO = {
   },
   gemini: {
     title: 'Gemini',
-    tags: [['Molto naturale', 'best'], ['Piano gratuito']],
+    tags: [['La più naturale', 'best'], ['A consumo']],
     text: 'Le voci di Google Gemini, guidate come un regista: le chiediamo di leggere da narratore italiano madrelingua e di recitare i dialoghi. Legge un paragrafo alla volta per un\'intonazione continua.',
     key: 'gemini',
-    keyHint: 'Crea una chiave gratuita su aistudio.google.com › Get API key. Con il piano gratuito ci sono limiti di richieste al minuto: se si raggiungono, la lettura attende qualche secondo e riprende da sola.',
+    keyHint: 'Crea la chiave su aistudio.google.com › Get API key. Gemini 3.8 richiede la fatturazione attiva (costo basso, a consumo); con una chiave gratuita l\'app usa da sola i modelli Gemini inclusi nel piano gratuito, se ce ne sono.',
   },
   elevenlabs: {
     title: 'ElevenLabs',

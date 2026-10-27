@@ -95,3 +95,18 @@ describe('Gemini: scelta del modello', () => {
     expect(calls.at(-1)).toBe('gemini-3.8-flash-lite-tts'); // ricorda il modello che funziona
   });
 });
+
+describe('Gemini: chiave gratuita', () => {
+  it('salta i modelli a pagamento e spiega cosa fare se nessuno è gratuito', async () => {
+    const { GeminiEngine } = await import('../src/engines/cloud.js');
+    const calls = [];
+    const quota = JSON.stringify({ error: { code: 429, message: 'Quota exceeded for metric: generate_content_free_tier_requests, limit: 0' } });
+    globalThis.fetch = async (url) => {
+      calls.push(url.match(/models\/([^:]+)/)[1]);
+      return new Response(quota, { status: 429 });
+    };
+    const engine = new GeminiEngine(() => 'k', () => undefined);
+    await expect(engine.synthesize('Ciao.')).rejects.toThrow(/fatturazione/);
+    expect(calls.length).toBeGreaterThan(2); // ha provato tutti i modelli, senza attese
+  });
+});
