@@ -97,7 +97,7 @@ describe('segmentazione', () => {
     const long = Array.from({ length: 30 }, (_, i) => `parola${i} altra parola`).join(', ') + '.';
     const parts = splitSentences(long);
     expect(parts.length).toBeGreaterThan(1);
-    parts.forEach((p) => expect(p.length).toBeLessThanOrEqual(280));
+    parts.forEach((p) => expect(p.length).toBeLessThanOrEqual(240));
     expect(parts.join(' ')).toBe(long);
   });
 

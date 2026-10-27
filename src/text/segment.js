@@ -8,7 +8,8 @@ const NO_BREAK_ABBR = new Set([
   'p.es', 'c.d', 'a.c', 'd.c', 'vs', 'mr', 'mrs', 'ms', 'jr', 'sr', 'ad',
 ]);
 
-const MAX_SENTENCE = 280;
+// oltre ~15 secondi alcune voci di Chrome si interrompono: le frasi lunghe vengono spezzate
+const MAX_SENTENCE = 240;
 const OPEN_QUOTES = '«“"‘\'';
 const CLOSERS = '»”"’\')]';
 

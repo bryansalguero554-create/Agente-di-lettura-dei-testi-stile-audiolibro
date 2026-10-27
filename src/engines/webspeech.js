@@ -28,6 +28,17 @@ export function scoreVoice(voice) {
   return { score, badge };
 }
 
+/** "Microsoft Isabella Online (Natural) - Italian (Italy)" → "Isabella" */
+export function cleanVoiceName(name) {
+  return name
+    .replace(/^Microsoft\s+/i, '')
+    .replace(/\s*\((natural|neural|premium|enhanced|migliorata)\)/gi, '')
+    .replace(/\s+Online\b/i, '')
+    .replace(/\s*[-–]\s*(Italian|Italiano).*$/i, '')
+    .replace(/\s*\((Italy|Italia|it-IT)\)/gi, '')
+    .trim() || name;
+}
+
 function synth() {
   return typeof window !== 'undefined' ? window.speechSynthesis : undefined;
 }
@@ -50,7 +61,7 @@ export async function listItalianVoices() {
   }
   return voices
     .filter((v) => /^it([-_]|$)/i.test(v.lang))
-    .map((v) => ({ voice: v, id: v.voiceURI || v.name, label: v.name.replace(/\s*\(.*?\)\s*/g, ' ').trim(), ...scoreVoice(v) }))
+    .map((v) => ({ voice: v, id: v.voiceURI || v.name, label: cleanVoiceName(v.name), ...scoreVoice(v) }))
     .sort((a, b) => b.score - a.score);
 }
 

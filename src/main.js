@@ -91,7 +91,14 @@ function confirmDialog(title, text, okLabel = 'Continua') {
   });
 }
 
-const fmtRate = (r) => `${r.toFixed(2).replace(/0$/, '').replace(/\.$/, '').replace('.', ',')}×`;
+const fmtRate = (r) => `${String(+r.toFixed(2)).replace('.', ',')}×`;
+
+function fmtShort(minutes) {
+  if (minutes < 1) return '<1 min';
+  const h = Math.floor(minutes / 60);
+  const m = Math.round(minutes % 60);
+  return h ? `${h} h ${String(m).padStart(2, '0')}` : `${m} min`;
+}
 
 function fmtDuration(minutes) {
   if (minutes < 1) return 'meno di un minuto';
@@ -338,11 +345,12 @@ function updatePosition() {
   $('#seek').value = sentence;
   const pct = Math.round(((globalIndex(book, chapter, sentence)) / Math.max(1, totalSentences(book) - 1)) * 100);
   if (player.state !== 'loading' || !$('#pos-label').textContent.startsWith('Scarico')) {
-    $('#pos-label').textContent = `Cap. ${chapter + 1}/${book.chapters.length} · ${pct}%`;
+    $('#pos-label').textContent = `Cap. ${chapter + 1} di ${book.chapters.length} · ${pct}%`;
   }
   const leftChapter = ch.sentences.slice(sentence).reduce((n, s) => n + s.text.length, 0) / CHARS_PER_MINUTE / player.rate;
   const leftBook = remainingChars(book, chapter, sentence) / CHARS_PER_MINUTE / player.rate;
-  $('#remaining-label').textContent = `${fmtDuration(leftChapter)} al termine del capitolo · ${fmtDuration(leftBook)} in tutto`;
+  $('#remaining-label').textContent = `capitolo ${fmtShort(leftChapter)} · libro ${fmtShort(leftBook)}`;
+  $('#remaining-label').title = `Mancano ${fmtDuration(leftChapter)} alla fine del capitolo e ${fmtDuration(leftBook)} alla fine del libro`;
 
   if (settings.follow && Date.now() > followPausedUntil) scrollToActive();
   else if (!isActiveVisible()) $('#follow-btn').hidden = false;
@@ -481,7 +489,7 @@ function setRate(rate) {
   persist();
   player.setRate(rate);
   $('#speed-btn').textContent = fmtRate(rate);
-  $('#speed-value').textContent = fmtRate(rate).replace('×', '') + '×';
+  $('#speed-value').textContent = fmtRate(rate);
   $('#speed-range').value = rate;
   document.querySelectorAll('#speed-presets button').forEach((b) => b.classList.toggle('on', +b.dataset.rate === rate));
   if (book) updatePosition();

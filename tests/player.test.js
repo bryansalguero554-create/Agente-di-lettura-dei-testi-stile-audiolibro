@@ -38,7 +38,7 @@ describe('player', () => {
     await vi.runAllTimersAsync();
     await ended;
     expect(engine.spoken.map((s) => s.text)).toEqual([
-      'Capitolo uno.', 'Era sera.', '"Vieni qui!" disse Anna.', 'Capitolo due.', 'Fine della storia.',
+      'Capitolo uno.', 'Era sera.', '"Vieni qui!"', 'disse Anna.', 'Capitolo due.', 'Fine della storia.',
     ]);
     expect(player.state).toBe('idle');
     vi.useRealTimers();

@@ -146,7 +146,10 @@ export class Player extends EventTarget {
 
   #units(chapter, index) {
     const s = this.book.chapters[chapter].sentences[index];
-    return speechUnits(s, { dialogueVoice: this.#settings().dialogueVoiceEnabled }).map((u) => ({
+    // le voci di sistema non interpretano da sole le battute: separandole possiamo
+    // cambiarne l'intonazione; i motori neurali invece capiscono il contesto della frase intera
+    const split = this.#settings().dialogueVoiceEnabled || this.#engine?.kind === 'speech';
+    return speechUnits(s, { dialogueVoice: split }).map((u) => ({
       ...u,
       spoken: normalizeForSpeech(u.text),
     }));

@@ -120,7 +120,8 @@ export function elevenBody(text, ctx, model) {
     if (ctx.previousText) body.previous_text = ctx.previousText;
     if (ctx.nextText) body.next_text = ctx.nextText;
   }
-  if (model === 'eleven_flash_v2_5' || model === 'eleven_v3') body.language_code = 'it';
+  // solo i modelli v2.5 accettano di forzare la lingua
+  if (model === 'eleven_flash_v2_5') body.language_code = 'it';
   return body;
 }
 

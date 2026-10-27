@@ -138,13 +138,13 @@ svg { width: 22px; height: 22px; flex: none; }
   scroll-behavior: smooth;
 }
 .reading > * { max-width: 680px; margin-left: auto; margin-right: auto; }
-.reading p { margin: 0 0 1em; text-wrap: pretty; hyphens: auto; }
+.reading p { margin: 0 auto 1em; text-wrap: pretty; hyphens: auto; }
 .reading h2 { font-size: 1.45em; line-height: 1.3; font-weight: 600; margin: .4em auto 1.2em; text-align: center; }
 .reading h2 + h2 { font-size: 1.1em; font-weight: 500; margin-top: -0.8em; color: var(--muted); }
-.s { border-radius: 4px; cursor: pointer; transition: background-color .25s, color .25s; box-decoration-break: clone; -webkit-box-decoration-break: clone; padding: 0.06em 0; }
+.s { border-radius: 5px; cursor: pointer; transition: background-color .3s, color .3s; box-decoration-break: clone; -webkit-box-decoration-break: clone; padding: 0.08em 0.12em; margin: 0 -0.12em; }
 .s:hover { background: var(--surface-2); }
 .s.read { color: var(--read); }
-.s.active { background: var(--hl); color: var(--hl-ink); box-shadow: 0 0 0 3px var(--hl); }
+.s.active { background: var(--hl); color: var(--hl-ink); }
 .s.marked { text-decoration: underline wavy var(--accent) 1px; text-underline-offset: 4px; }
 .chapter-end { text-align: center; color: var(--muted); font-family: var(--font-ui); font-size: 14px; margin-top: 2.5em !important; }
 .chapter-end button { margin-top: 10px; }
@@ -163,7 +163,8 @@ svg { width: 22px; height: 22px; flex: none; }
 }
 .player > * { max-width: 680px; margin: 0 auto; }
 .progress-row input { width: 100%; }
-.times { display: flex; justify-content: space-between; font-size: 12px; color: var(--player-muted); margin-top: 2px; font-variant-numeric: tabular-nums; }
+.times { display: flex; justify-content: space-between; gap: 12px; font-size: 12px; color: var(--player-muted); margin-top: 2px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.times span { overflow: hidden; text-overflow: ellipsis; }
 .controls { display: flex; align-items: center; justify-content: center; gap: 14px; margin: 6px auto 10px; }
 .ctl { width: 48px; height: 48px; border-radius: 50%; border: 0; background: transparent; display: grid; place-items: center; color: var(--player-ink); }
 .ctl:hover { background: rgba(255,255,255,.08); }
@@ -176,16 +177,16 @@ svg { width: 22px; height: 22px; flex: none; }
 .play svg { width: 30px; height: 30px; }
 .play .loader { position: absolute; inset: -5px; border-radius: 50%; border: 3px solid transparent; border-top-color: var(--player-ink); opacity: 0; }
 .play.loading .loader { opacity: 1; animation: spin .9s linear infinite; }
-.extras { display: flex; justify-content: center; gap: 8px; flex-wrap: wrap; }
+.extras { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
 .pill {
   display: inline-flex; align-items: center; gap: 6px; height: 36px; padding: 0 12px;
   border-radius: 999px; border: 1px solid rgba(255,255,255,.14); background: rgba(255,255,255,.06);
-  color: var(--player-ink); font-size: 13.5px; font-weight: 500; max-width: 46%;
+  color: var(--player-ink); font-size: 13.5px; font-weight: 500; justify-content: center; min-width: 0;
 }
 .pill svg { width: 17px; height: 17px; }
 .pill span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .pill.on { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
-#speed-btn { font-variant-numeric: tabular-nums; min-width: 56px; justify-content: center; font-weight: 600; }
+#speed-btn { font-variant-numeric: tabular-nums; font-weight: 600; }
 
 input[type='range'] { accent-color: var(--accent); height: 22px; }
 
@@ -262,16 +263,15 @@ select, input[type='password'], input[type='text'] {
 .confirm-text { line-height: 1.5; margin-top: 0; }
 
 .toast {
-  position: fixed; left: 50%; bottom: calc(220px + env(safe-area-inset-bottom)); transform: translateX(-50%);
+  position: fixed; left: 50%; top: calc(72px + env(safe-area-inset-top)); transform: translateX(-50%);
   max-width: min(92vw, 520px); background: var(--text); color: var(--bg); padding: 12px 18px; border-radius: 14px;
   box-shadow: var(--shadow); font-size: 14.5px; line-height: 1.4; z-index: 50; text-align: center;
 }
-#library-view ~ .toast, .toast.low { bottom: calc(24px + env(safe-area-inset-bottom)); }
+.toast.low { top: auto; bottom: calc(24px + env(safe-area-inset-bottom)); }
 
 @media (max-width: 420px) {
   .controls { gap: 6px; }
-  .pill { padding: 0 10px; }
-  .pill span { max-width: 80px; }
+  .pill { padding: 0 8px; gap: 4px; font-size: 13px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
