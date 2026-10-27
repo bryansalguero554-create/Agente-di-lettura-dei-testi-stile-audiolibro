@@ -13,7 +13,7 @@ export function detectFormat(file) {
 }
 
 let pdfjsPromise = null;
-async function loadPdfjs() {
+export async function loadPdfjs() {
   if (!pdfjsPromise) {
     pdfjsPromise = Promise.all([
       import('pdfjs-dist'),

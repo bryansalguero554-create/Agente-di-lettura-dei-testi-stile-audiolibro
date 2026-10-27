@@ -21,6 +21,8 @@
     <symbol id="i-next-ch" viewBox="0 0 24 24"><path d="M18 5v14M5 6l9 6-9 6V6z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/></symbol>
     <symbol id="i-back-s" viewBox="0 0 24 24"><path d="M4 12a8 8 0 1 0 2.4-5.7M4 4v4h4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
     <symbol id="i-fwd-s" viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-2.4-5.7M20 4v4h-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-doc" viewBox="0 0 24 24"><path d="M7 3h7l5 5v13H7zM14 3v5h5M10 13h6M10 17h6" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/></symbol>
+    <symbol id="i-text" viewBox="0 0 24 24"><path d="M5 6h14M5 10h14M5 14h10M5 18h12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
     <symbol id="i-list" viewBox="0 0 24 24"><path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
     <symbol id="i-bookmark" viewBox="0 0 24 24"><path d="M6 4h12v17l-6-4-6 4V4z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></symbol>
     <symbol id="i-bookmark-add" viewBox="0 0 24 24"><path d="M6 4h12v17l-6-4-6 4V4zM12 8v6M9 11h6" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/></symbol>
@@ -70,12 +72,14 @@
         <span id="book-title" class="book-title"></span>
         <span id="chapter-title" class="chapter-title"></span>
       </button>
+      <button class="icon-btn" data-action="toggle-view" id="view-btn" aria-label="Mostra il testo semplice"><svg><use href="#i-text"/></svg></button>
       <button class="icon-btn" data-action="open-toc" aria-label="Capitoli"><svg><use href="#i-list"/></svg></button>
       <button class="icon-btn" data-action="open-bookmarks" aria-label="Segnalibri"><svg><use href="#i-bookmark"/></svg></button>
       <button class="icon-btn" data-action="open-settings" aria-label="Impostazioni"><svg><use href="#i-gear"/></svg></button>
     </header>
 
     <main id="text" class="reading" tabindex="-1"></main>
+    <div id="doc-view" class="doc-view" hidden></div>
     <button id="follow-btn" class="follow-btn" hidden>Torna alla frase in lettura</button>
 
     <footer class="player">

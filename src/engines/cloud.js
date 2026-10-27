@@ -240,3 +240,95 @@ export class GoogleEngine {
     });
   }
 }
+
+// ---------------------------------------------------------------- Gemini (Google AI Studio)
+
+export const GEMINI_MODELS = [
+  ['gemini-3.1-flash-tts-preview', 'Gemini 3.1 Flash TTS · la più recente'],
+  ['gemini-2.5-pro-preview-tts', 'Gemini 2.5 Pro TTS · massima qualità'],
+  ['gemini-2.5-flash-preview-tts', 'Gemini 2.5 Flash TTS · veloce'],
+];
+
+const GEMINI_VOICES = [
+  ['Sulafat', 'Femminile, calda'], ['Charon', 'Maschile, narrativa'], ['Kore', 'Femminile, decisa'],
+  ['Algieba', 'Maschile, morbida'], ['Vindemiatrix', 'Femminile, gentile'], ['Iapetus', 'Maschile, chiara'],
+  ['Achernar', 'Femminile, dolce'], ['Sadaltager', 'Maschile, colta'], ['Aoede', 'Femminile, ariosa'],
+  ['Gacrux', 'Femminile, matura'], ['Schedar', 'Maschile, pacata'], ['Despina', 'Femminile, vellutata'],
+  ['Rasalgethi', 'Maschile, informativa'], ['Erinome', 'Femminile, limpida'], ['Algenib', 'Maschile, roca'],
+  ['Leda', 'Femminile, giovane'], ['Orus', 'Maschile, decisa'], ['Zephyr', 'Femminile, luminosa'],
+  ['Puck', 'Maschile, vivace'], ['Enceladus', 'Maschile, sussurrata'], ['Umbriel', 'Maschile, rilassata'],
+  ['Achird', 'Maschile, amichevole'], ['Callirrhoe', 'Femminile, rilassata'], ['Autonoe', 'Femminile, brillante'],
+  ['Laomedeia', 'Femminile, allegra'], ['Pulcherrima', 'Femminile, diretta'], ['Alnilam', 'Maschile, ferma'],
+  ['Fenrir', 'Maschile, energica'], ['Zubenelgenubi', 'Maschile, informale'], ['Sadachbia', 'Maschile, vivace'],
+];
+
+/** Istruzione di regia per Gemini: il testo da leggere segue dopo i due punti. */
+export function geminiPrompt(text, ctx = {}) {
+  let style = 'Leggi in italiano, con accento italiano madrelingua e pronuncia standard, come un narratore professionista di audiolibri';
+  if (ctx.heading) style += ', annunciando con calma il titolo del capitolo';
+  else style += ': tono caldo e coinvolgente, ritmo calmo, pause naturali alla punteggiatura';
+  if (ctx.dialogue) style += ', e interpreta i dialoghi come un attore, con l\'emozione suggerita dal contenuto ma senza esagerare';
+  return `${style}:\n${text}`;
+}
+
+/** Avvolge il PCM 16 bit restituito da Gemini in un file WAV riproducibile. */
+export function pcmToWav(bytes, sampleRate = 24000) {
+  const header = new DataView(new ArrayBuffer(44));
+  const str = (o, s) => [...s].forEach((c, i) => header.setUint8(o + i, c.charCodeAt(0)));
+  str(0, 'RIFF'); header.setUint32(4, 36 + bytes.length, true); str(8, 'WAVE'); str(12, 'fmt ');
+  header.setUint32(16, 16, true); header.setUint16(20, 1, true); header.setUint16(22, 1, true);
+  header.setUint32(24, sampleRate, true); header.setUint32(28, sampleRate * 2, true);
+  header.setUint16(32, 2, true); header.setUint16(34, 16, true); str(36, 'data'); header.setUint32(40, bytes.length, true);
+  return new Blob([header.buffer, bytes], { type: 'audio/wav' });
+}
+
+export class GeminiEngine {
+  kind = 'audio';
+  id = 'gemini';
+  label = 'Gemini (Google AI Studio)';
+  // più frasi per richiesta: il piano gratuito ha pochi messaggi al minuto
+  groupChars = 900;
+  constructor(getKey, getModel) { this.getKey = getKey; this.getModel = getModel; }
+
+  async voices() {
+    return GEMINI_VOICES.map(([id, hint]) => ({ id, label: id, hint, badge: 'Neurale' }));
+  }
+
+  bestVoiceId() { return 'Sulafat'; }
+
+  async prepare() {
+    if (!this.getKey()) throw new Error('Inserisci la chiave API di Gemini (Google AI Studio) nelle impostazioni.');
+  }
+
+  synthesize(text, ctx = {}) {
+    const model = this.getModel() || GEMINI_MODELS[0][0];
+    return withRetry(async () => {
+      const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-goog-api-key': this.getKey() },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: geminiPrompt(text, ctx) }] }],
+          generationConfig: {
+            responseModalities: ['AUDIO'],
+            speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: ctx.voice || this.bestVoiceId() } } },
+          },
+        }),
+        signal: ctx.signal,
+      });
+      if (res.status === 429 && (ctx.attempt || 0) < 3) {
+        // piano gratuito: si attende che si liberi la quota al minuto e si riprova
+        const wait = Number(res.headers.get('retry-after')) || 20;
+        await new Promise((r) => setTimeout(r, wait * 1000));
+        return this.synthesize(text, { ...ctx, attempt: (ctx.attempt || 0) + 1 });
+      }
+      if (res.status === 404) throw new Error(`Gemini: il modello ${model} non è disponibile per questa chiave. Scegline un altro nelle impostazioni.`);
+      if (!res.ok) throw await apiError(res, 'Gemini');
+      const json = await res.json();
+      const part = json.candidates?.[0]?.content?.parts?.find((p) => p.inlineData?.data);
+      if (!part) throw new Error('Gemini non ha restituito audio per questo passaggio. Riprova o scegli un altro modello.');
+      const rate = Number((part.inlineData.mimeType || '').match(/rate=(\d+)/)?.[1]) || 24000;
+      const bytes = Uint8Array.from(atob(part.inlineData.data), (c) => c.charCodeAt(0));
+      return pcmToWav(bytes, rate);
+    });
+  }
+}

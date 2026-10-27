@@ -1,7 +1,7 @@
 // Libreria personale salvata nel browser (IndexedDB): libri, posizione di lettura e segnalibri.
 
 const DB_NAME = 'narratore';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 let dbPromise = null;
 
 function open() {
@@ -11,6 +11,8 @@ function open() {
     req.onupgradeneeded = () => {
       const db = req.result;
       if (!db.objectStoreNames.contains('books')) db.createObjectStore('books', { keyPath: 'id' });
+      // file originali, per mostrare il documento così com'è durante l'ascolto
+      if (!db.objectStoreNames.contains('files')) db.createObjectStore('files');
       if (!db.objectStoreNames.contains('progress')) db.createObjectStore('progress', { keyPath: 'bookId' });
       if (!db.objectStoreNames.contains('bookmarks')) {
         const s = db.createObjectStore('bookmarks', { keyPath: 'id', autoIncrement: true });
@@ -49,10 +51,16 @@ export const books = {
   all: () => tx('books', 'readonly', (s) => s.getAll()),
   async remove(id) {
     await tx('books', 'readwrite', (s) => s.delete(id));
+    await tx('files', 'readwrite', (s) => s.delete(id));
     await tx('progress', 'readwrite', (s) => s.delete(id));
     const marks = await bookmarks.list(id);
     await Promise.all(marks.map((m) => bookmarks.remove(m.id)));
   },
+};
+
+export const files = {
+  put: (id, data) => tx('files', 'readwrite', (s) => s.put(data, id)),
+  get: (id) => tx('files', 'readonly', (s) => s.get(id)),
 };
 
 export const progress = {

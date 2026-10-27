@@ -13,8 +13,10 @@ export const DEFAULTS = {
   fontSize: 19,
   theme: 'auto',
   follow: true,
-  keys: { openai: '', elevenlabs: '', google: '' },
+  viewMode: 'original', // 'original' = PDF/Word come appare; 'text' = solo testo
+  keys: { openai: '', elevenlabs: '', google: '', gemini: '' },
   elevenModel: 'eleven_multilingual_v2',
+  geminiModel: 'gemini-3.1-flash-tts-preview',
   piperConsent: false,
 };
 

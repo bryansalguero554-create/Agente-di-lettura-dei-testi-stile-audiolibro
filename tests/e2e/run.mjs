@@ -149,6 +149,17 @@ async function main() {
     assert(!/^\s*\d+\s*$/m.test(text), 'numero di pagina rimasto nel testo');
     assert(text.includes('i tergicristalli disegnavano archi regolari nel buio.'), 'frase spezzata male:\n' + text.slice(0, 400));
   });
+  await step('mostra le pagine originali del PDF', async () => {
+    await page.locator('.pdf-page canvas').first().waitFor();
+    await page.waitForFunction(() => window.__narratore.docView?.ranges?.length > 0, null, { timeout: 15000 });
+    const pages = await page.locator('.pdf-page').count();
+    assert(pages >= 3, `pagine: ${pages}`);
+    const coverage = await page.evaluate(() => {
+      const r = window.__narratore.docView.ranges.flat();
+      return r.filter(Boolean).length / r.length;
+    });
+    assert(coverage > 0.9, `frasi ritrovate nel PDF: ${Math.round(coverage * 100)}%`);
+  });
   await page.screenshot({ path: join(out, '02-lettore.png') });
 
   await step('legge con la voce Natural, normalizza ed evidenzia la frase', async () => {
@@ -164,7 +175,10 @@ async function main() {
     assert(active.length > 0, 'nessuna frase evidenziata');
     const read = await page.locator('.s.read').count();
     assert(read >= 2, `frasi già lette non marcate: ${read} (ultima detta: ${last})`);
+    const marks = await page.locator('.pdf-overlay .doc-mark').count();
+    assert(marks > 0, 'nessuna evidenziazione sulla pagina del PDF');
   });
+  await page.screenshot({ path: join(out, '03b-pdf-evidenziato.png') });
   await step('i dialoghi hanno un\'intonazione diversa', async () => {
     await page.waitForFunction(() => window.__spoken.some((s) => s.text.startsWith('"Quasi"')), null, { timeout: 15000 });
     const spoken = await page.evaluate(() => window.__spoken);
@@ -205,6 +219,11 @@ async function main() {
     assert(!spoken.includes('Capitolo secondo.'), 'ha continuato nel capitolo successivo');
   });
 
+  await step('si passa al testo semplice e ritorno', async () => {
+    await page.click('#view-btn');
+    await page.locator('#text').waitFor({ state: 'visible' });
+    assert(await page.locator('#doc-view').isHidden(), 'vista originale ancora visibile');
+  });
   await step('il clic su una frase fa partire la lettura da lì', async () => {
     const before = await page.evaluate(() => window.__spoken.length);
     await page.locator('.s', { hasText: 'Lucia annuì.' }).click();
@@ -258,6 +277,17 @@ async function main() {
     assert((await page.locator('#book-title').innerText()) === 'Il faro di Levante', 'titolo docx');
     const titles = await page.evaluate(() => window.__narratore.player.book.chapters.map((c) => c.title));
     assert(JSON.stringify(titles) === '["Capitolo 1","Capitolo 2"]', JSON.stringify(titles));
+  });
+  await step('mostra il Word originale con la frase evidenziata', async () => {
+    await page.evaluate(() => { window.__narratore.settings.viewMode = 'original'; });
+    await page.click('#view-btn');
+    await page.locator('.docx-page').waitFor();
+    await page.evaluate(() => window.__narratore.player.seek(0, 1));
+    await page.waitForFunction(() => CSS.highlights.has('reading'));
+    const txt = await page.evaluate(() => [...CSS.highlights.get('reading')][0].toString());
+    assert(txt.startsWith('Il Sig. Bianchi arrivò al faro'), `testo evidenziato: ${txt}`);
+    assert(await page.locator('.docx-page strong').count() >= 1, 'formattazione del Word persa');
+    await page.screenshot({ path: join(out, '05b-docx-evidenziato.png') });
   });
   await step('le battute vengono lette da una seconda voce', async () => {
     await page.click('[aria-label="Impostazioni"] >> nth=1');

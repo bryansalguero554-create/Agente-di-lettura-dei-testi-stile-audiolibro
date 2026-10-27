@@ -1,12 +1,12 @@
 import { Player } from './player.js';
 import { SleepTimer } from './sleep-timer.js';
 import { loadSettings, saveSettings } from './settings.js';
-import { books, progress, bookmarks, fileId } from './storage.js';
-import { openFile } from './parsers/index.js';
+import { books, files, progress, bookmarks, fileId } from './storage.js';
+import { openFile, loadPdfjs } from './parsers/index.js';
 import { globalIndex, totalSentences, remainingChars } from './book.js';
 import { WebSpeechEngine, isSupported as webSpeechSupported, listItalianVoices } from './engines/webspeech.js';
 import { PiperEngine, PIPER_VOICES } from './engines/piper.js';
-import { OpenAIEngine, ElevenLabsEngine, GoogleEngine, ELEVEN_MODELS } from './engines/cloud.js';
+import { OpenAIEngine, ElevenLabsEngine, GoogleEngine, GeminiEngine, ELEVEN_MODELS, GEMINI_MODELS } from './engines/cloud.js';
 import { normalizeForSpeech } from './text/normalize-it.js';
 
 const $ = (sel) => document.querySelector(sel);
@@ -23,6 +23,7 @@ const engines = {
   openai: new OpenAIEngine(() => settings.keys.openai),
   elevenlabs: new ElevenLabsEngine(() => settings.keys.elevenlabs, () => settings.elevenModel),
   google: new GoogleEngine(() => settings.keys.google),
+  gemini: new GeminiEngine(() => settings.keys.gemini, () => settings.geminiModel),
 };
 
 const ENGINE_INFO = {
@@ -35,6 +36,13 @@ const ENGINE_INFO = {
     title: 'Voci del dispositivo',
     tags: [['Gratis'], ['Immediata']],
     text: 'Usa le voci italiane del sistema. Le più naturali: «Natural» su Microsoft Edge, «Premium/Migliorata» su iPhone e Mac (Impostazioni › Accessibilità › Contenuto letto ad alta voce › Voci).',
+  },
+  gemini: {
+    title: 'Gemini',
+    tags: [['Molto naturale', 'best'], ['Piano gratuito']],
+    text: 'Le voci di Google Gemini, guidate come un regista: le chiediamo di leggere da narratore italiano madrelingua e di recitare i dialoghi. Legge un paragrafo alla volta per un\'intonazione continua.',
+    key: 'gemini',
+    keyHint: 'Crea una chiave gratuita su aistudio.google.com › Get API key. Con il piano gratuito ci sono limiti di richieste al minuto: se si raggiungono, la lettura attende qualche secondo e riprende da sola.',
   },
   elevenlabs: {
     title: 'ElevenLabs',
@@ -60,7 +68,7 @@ const ENGINE_INFO = {
 };
 // versione di prova ospitata dove la rete esterna è bloccata: solo voci del dispositivo
 const LIMITED = import.meta.env.VITE_LIMITED === '1';
-const ENGINE_ORDER = LIMITED ? ['device'] : ['piper', 'device', 'elevenlabs', 'openai', 'google'];
+const ENGINE_ORDER = LIMITED ? ['device'] : ['gemini', 'piper', 'device', 'elevenlabs', 'openai', 'google'];
 
 const player = new Player({ settings: () => settings });
 const timer = new SleepTimer(player);
@@ -237,6 +245,7 @@ async function importFile(file) {
     const id = await fileId(data);
     const existing = await books.get(id);
     if (!existing) await books.put({ id, ...parsed, fileName: file.name, format, addedAt: Date.now() });
+    await files.put(id, data);
     status.hidden = true;
     await openBook(id);
     if (!existing) toast(`Pronto: ${parsed.chapters.length} ${parsed.chapters.length === 1 ? 'capitolo' : 'capitoli'}, circa ${fmtDuration(parsed.chars / CHARS_PER_MINUTE)} di ascolto.`);
@@ -264,9 +273,70 @@ async function openBook(id) {
   updatePosition();
   scrollToActive('auto');
   history.pushState({ book: id }, '');
+  await showOriginal(settings.viewMode !== 'text');
+}
+
+// ------------------------------------------------------------------ documento originale
+
+let docView = null; // vista PDF o Word con l'evidenziazione sul documento
+let docMark = null; // elemento (o Range) della frase evidenziata
+
+const scroller = () => (docView ? $('#doc-view') : $('#text'));
+const activeTarget = () => (docView ? docMark : document.querySelector('.s.active'));
+
+function updateViewButton(original) {
+  const btn = $('#view-btn');
+  btn.querySelector('use').setAttribute('href', original ? '#i-text' : '#i-doc');
+  btn.setAttribute('aria-label', original ? 'Mostra il testo semplice' : 'Mostra il documento originale');
+  btn.title = btn.getAttribute('aria-label');
+}
+
+async function showOriginal(on) {
+  docView?.destroy();
+  docView = null;
+  docMark = null;
+  const current = book;
+  let data = null;
+  if (on && current) data = await files.get(current.id);
+  if (on && !data) {
+    if (settings.viewMode !== 'text') toast('Per vedere il documento originale apri di nuovo il file: i libri aggiunti prima di questa versione hanno solo il testo.', 6000);
+    on = false;
+  }
+  $('#doc-view').hidden = !on;
+  $('#text').hidden = on;
+  updateViewButton(on);
+  if (!on) {
+    scrollToActive('auto');
+    return;
+  }
+  $('#doc-view').innerHTML = '<p class="doc-loading">Preparo il documento…</p>';
+  try {
+    const view = current.format === 'pdf'
+      ? new (await import('./views/pdf-view.js')).PdfView($('#doc-view'), data, await loadPdfjs())
+      : new (await import('./views/docx-view.js')).DocxView($('#doc-view'), data);
+    view.onSentenceClick = ({ chapter, sentence }) => {
+      followPausedUntil = 0;
+      player.seek(chapter, sentence);
+      if (player.state !== 'playing' && player.state !== 'loading') togglePlay();
+    };
+    docView = view;
+    await view.init(current);
+    if (docView !== view || book !== current) return;
+    updatePosition();
+    scrollToActive('auto');
+  } catch (err) {
+    console.error(err);
+    toast('Non riesco a mostrare il documento originale: uso il testo semplice.', 5000);
+    docView = null;
+    $('#doc-view').hidden = true;
+    $('#text').hidden = false;
+    updateViewButton(false);
+  }
 }
 
 function closeBook() {
+  docView?.destroy();
+  docView = null;
   player.stop();
   saveProgress(true);
   book = null;
@@ -318,9 +388,9 @@ function markBookmarks() {
 }
 
 function scrollToActive(behavior = 'smooth') {
-  const el = document.querySelector('.s.active');
+  const el = activeTarget();
   if (!el) return;
-  const root = $('#text');
+  const root = scroller();
   const r = el.getBoundingClientRect();
   const rr = root.getBoundingClientRect();
   const target = root.scrollTop + r.top - rr.top - rr.height * 0.32;
@@ -329,10 +399,10 @@ function scrollToActive(behavior = 'smooth') {
 }
 
 function isActiveVisible() {
-  const el = document.querySelector('.s.active');
+  const el = activeTarget();
   if (!el) return true;
   const r = el.getBoundingClientRect();
-  const rr = $('#text').getBoundingClientRect();
+  const rr = scroller().getBoundingClientRect();
   return r.bottom > rr.top && r.top < rr.bottom;
 }
 
@@ -346,6 +416,7 @@ function updatePosition() {
     el.classList.toggle('read', +el.dataset.i < sentence);
   });
   document.querySelector(`.s[data-i="${sentence}"]`)?.classList.add('active');
+  if (docView) docMark = docView.highlight(chapter, sentence);
 
   const ch = book.chapters[chapter];
   $('#seek').value = sentence;
@@ -586,11 +657,12 @@ async function renderVoiceControls() {
     $('#key-hint').textContent = info.keyHint;
     $('#api-key').value = settings.keys[info.key] || '';
   }
-  $('#eleven-model-field').hidden = engine.id !== 'elevenlabs';
-  if (engine.id === 'elevenlabs') {
+  const models = { elevenlabs: [ELEVEN_MODELS, 'elevenModel'], gemini: [GEMINI_MODELS, 'geminiModel'] }[engine.id];
+  $('#eleven-model-field').hidden = !models;
+  if (models) {
     const sel = $('#eleven-model');
-    sel.innerHTML = ELEVEN_MODELS.map(([id, label]) => `<option value="${id}">${label}</option>`).join('');
-    sel.value = settings.elevenModel;
+    sel.innerHTML = models[0].map(([id, label]) => `<option value="${id}">${label}</option>`).join('');
+    sel.value = settings[models[1]] || models[0][0][0];
   }
 
   let voices = [];
@@ -658,6 +730,11 @@ document.addEventListener('click', (e) => {
     'open-voice': openSettings,
     'close-book': () => history.back(),
     'open-toc': openToc,
+    'toggle-view': () => {
+      settings.viewMode = docView ? 'text' : 'original';
+      persist();
+      showOriginal(settings.viewMode === 'original');
+    },
     'open-bookmarks': openBookmarks,
     toggle: togglePlay,
     'prev-chapter': () => { followPausedUntil = 0; player.prevChapter(); },
@@ -702,12 +779,14 @@ $('#text').addEventListener('click', (e) => {
 });
 
 // se l'utente scorre il testo, sospendiamo l'auto-scorrimento per qualche secondo
-['wheel', 'touchmove'].forEach((ev) => $('#text').addEventListener(ev, () => {
-  followPausedUntil = Date.now() + 6000;
-}, { passive: true }));
-$('#text').addEventListener('scroll', () => {
-  if (Date.now() < followPausedUntil) $('#follow-btn').hidden = isActiveVisible();
-}, { passive: true });
+for (const el of [$('#text'), $('#doc-view')]) {
+  ['wheel', 'touchmove'].forEach((ev) => el.addEventListener(ev, () => {
+    followPausedUntil = Date.now() + 6000;
+  }, { passive: true }));
+  el.addEventListener('scroll', () => {
+    if (Date.now() < followPausedUntil) $('#follow-btn').hidden = isActiveVisible();
+  }, { passive: true });
+}
 $('#follow-btn').addEventListener('click', () => { followPausedUntil = 0; scrollToActive(); });
 
 $('#seek').addEventListener('input', (e) => {
@@ -752,7 +831,11 @@ $('#dialogue-toggle').addEventListener('change', (e) => {
   $('#dialogue-row').hidden = !e.target.checked;
   if (e.target.checked && settings.engine === 'piper') toast('Con la voce gratuita offline la seconda voce richiede un secondo download.', 5000);
 });
-$('#eleven-model').addEventListener('change', (e) => { settings.elevenModel = e.target.value; persist(); player.clearCache(); });
+$('#eleven-model').addEventListener('change', (e) => {
+  settings[settings.engine === 'gemini' ? 'geminiModel' : 'elevenModel'] = e.target.value;
+  persist();
+  player.clearCache();
+});
 $('#pace-select').addEventListener('change', (e) => { settings.pace = e.target.value; persist(); });
 $('#announce-toggle').addEventListener('change', (e) => { settings.announceChapters = e.target.checked; persist(); });
 $('#follow-toggle').addEventListener('change', (e) => { settings.follow = e.target.checked; persist(); });
@@ -838,4 +921,4 @@ async function start() {
 start();
 
 // esposto per i test automatici
-window.__narratore = { player, settings, engines, timer };
+window.__narratore = { player, settings, engines, timer, get docView() { return docView; } };

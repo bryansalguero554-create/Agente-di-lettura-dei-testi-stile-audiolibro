@@ -144,7 +144,42 @@ export class Player extends EventTarget {
     };
   }
 
+  /**
+   * Ultima frase del gruppo che inizia da `start`. I motori con `groupChars` leggono più
+   * frasi dello stesso paragrafo in una sola richiesta: meno chiamate e intonazione più continua.
+   */
+  groupEnd(chapter, start) {
+    const sentences = this.book.chapters[chapter].sentences;
+    const first = sentences[start];
+    const limit = this.#engine?.groupChars || 0;
+    let end = start;
+    if (!limit || first.heading) return end;
+    let chars = first.text.length;
+    while (end + 1 < sentences.length) {
+      const next = sentences[end + 1];
+      if (next.heading || next.paragraph !== first.paragraph || chars + next.text.length + 1 > limit) break;
+      end++;
+      chars += next.text.length + 1;
+    }
+    return end;
+  }
+
   #units(chapter, index) {
+    const end = this.groupEnd(chapter, index);
+    if (end > index) {
+      const group = this.book.chapters[chapter].sentences.slice(index, end + 1);
+      const spoken = group.map((x) => normalizeForSpeech(x.text));
+      return [{
+        text: group.map((x) => x.text).join(' '),
+        spoken: spoken.join(' '),
+        // il peso di ogni frase serve a evidenziarla mentre l'audio scorre
+        weights: spoken.map((x) => x.length + 1),
+        end,
+        dialogue: group.some((x) => x.dialogue >= 0.5),
+        mood: group[group.length - 1].mood,
+        heading: false,
+      }];
+    }
     const s = this.book.chapters[chapter].sentences[index];
     // le voci di sistema non interpretano da sole le battute: separandole possiamo
     // cambiarne l'intonazione; i motori neurali invece capiscono il contesto della frase intera
@@ -157,7 +192,7 @@ export class Player extends EventTarget {
 
   // Per i motori audio: promessa dell'URL dell'audio di una unità, con cache.
   #audioFor(chapter, index, unitIndex, unit) {
-    const key = `${chapter}:${index}:${unitIndex}:${this.#voiceFor(unit)}`;
+    const key = `${chapter}:${index}-${unit.end ?? index}:${unitIndex}:${this.#voiceFor(unit)}`;
     if (!this.#cache.has(key)) {
       const engine = this.#engine;
       const p = engine.synthesize(unit.spoken, this.#ctxFor(chapter, index, unit)).then((blob) => URL.createObjectURL(blob));
@@ -177,6 +212,7 @@ export class Player extends EventTarget {
     if (this.#engine?.kind !== 'audio') return;
     let c = chapter;
     let i = index;
+    i = this.groupEnd(c, i);
     for (let n = 0; n < PREFETCH; n++) {
       i++;
       if (i >= this.book.chapters[c].sentences.length) {
@@ -184,7 +220,9 @@ export class Player extends EventTarget {
         i = 0;
         if (c >= this.book.chapters.length) return;
       }
-      this.#units(c, i).forEach((u, k) => this.#audioFor(c, i, k, u).catch(() => {}));
+      const units = this.#units(c, i);
+      units.forEach((u, k) => this.#audioFor(c, i, k, u).catch(() => {}));
+      i = units[0]?.end ?? i;
     }
   }
 
@@ -220,8 +258,9 @@ export class Player extends EventTarget {
   async #loop(runId) {
     const alive = () => runId === this.#runId;
     while (alive()) {
-      const { chapter, sentence } = this;
-      const s = this.current;
+      const { chapter } = this;
+      let { sentence } = this;
+      let s = this.current;
       if (!s) break;
       this.#emitPosition();
       const settings = this.#settings();
@@ -232,12 +271,32 @@ export class Player extends EventTarget {
           if (this.#engine.kind === 'audio') {
             const urls = units.map((u, k) => this.#audioFor(chapter, sentence, k, u));
             this.#prefetch(chapter, sentence);
-            for (const urlP of urls) {
+            for (const [k, urlP] of urls.entries()) {
               const url = await urlP;
               if (!alive()) return;
               this.#setState('playing');
-              await this.#playUrl(url);
+              const { weights } = units[k];
+              const start = sentence;
+              await this.#playUrl(url, weights && ((fraction) => {
+                // evidenzia la frase che corrisponde al punto dell'audio
+                let acc = 0;
+                const total = weights.reduce((a, b) => a + b, 0);
+                let i = 0;
+                while (i < weights.length - 1 && (acc + weights[i]) / total <= fraction) acc += weights[i++];
+                if (alive() && this.sentence !== start + i) {
+                  this.sentence = start + i;
+                  this.#emitPosition();
+                }
+              }));
               if (!alive()) return;
+              if (units[k].end != null) {
+                sentence = units[k].end;
+                s = this.book.chapters[chapter].sentences[sentence];
+                if (this.sentence !== sentence) {
+                  this.sentence = sentence;
+                  this.#emitPosition();
+                }
+              }
             }
           } else {
             this.#setState('playing');
@@ -277,11 +336,12 @@ export class Player extends EventTarget {
     }
   }
 
-  #playUrl(url) {
+  #playUrl(url, onProgress) {
     const audio = this.#audio;
     return new Promise((resolve, reject) => {
       this.#playbackDone = resolve;
       audio.onended = () => resolve();
+      audio.ontimeupdate = onProgress ? () => audio.duration && onProgress(audio.currentTime / audio.duration) : null;
       audio.onerror = () => reject(new Error('Impossibile riprodurre l\'audio generato.'));
       audio.src = url;
       audio.playbackRate = this.rate;
@@ -305,6 +365,7 @@ export class Player extends EventTarget {
   #stopOutput() {
     if (this.#audio) {
       this.#audio.onended = null;
+      this.#audio.ontimeupdate = null;
       this.#audio.pause();
     }
     this.#playbackDone?.();

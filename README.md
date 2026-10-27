@@ -11,7 +11,7 @@ Narratore è un'app web che funziona nel browser di telefono, tablet e computer.
 | 📄 **PDF e Word (.docx)** | Toglie intestazioni ripetute e numeri di pagina, ricompone le parole sillabate e i paragrafi, legge anche elenchi e tabelle. |
 | 📚 **Capitoli** | Li ricava dall'indice del PDF, dagli stili «Titolo» di Word o da righe come «Capitolo 3», «Prologo», «IV». I documenti senza capitoli vengono divisi in sezioni. |
 | 🔖 **Segnalibri e ripresa** | Ricorda per ogni libro il punto esatto in cui ti sei fermato; aggiungi segnalibri con un tocco. |
-| ✨ **Testo evidenziato** | La frase letta si illumina e la pagina scorre da sola. Tocca una frase qualsiasi per far ripartire la lettura da lì. |
+| ✨ **Evidenziato sul documento** | La frase letta si illumina direttamente sulle pagine originali del PDF o sul Word con la sua formattazione, e la pagina scorre da sola. Tocca una frase per far ripartire la lettura da lì. Con il pulsante ☰ in alto passi alla vista di solo testo. |
 | ⏩ **Velocità** | Da 0,5× a 2× senza effetto «voce di cartone animato». |
 | 🌙 **Timer di spegnimento** | 5 minuti – 1 ora oppure «fine capitolo», con dissolvenza finale. In pausa il timer si ferma. |
 | 🎭 **Interpretazione espressiva** | Pause naturali (frase, paragrafo, capitolo), intonazione diversa per domande, esclamazioni, sospensioni e dialoghi; voce separata opzionale per le battute. |
@@ -25,6 +25,7 @@ Narratore offre cinque motori vocali (Impostazioni ⚙️ › *Motore vocale*). 
 
 | Motore | Qualità | Costo | Note |
 |---|---|---|---|
+| **Gemini** (Google AI Studio) | ★★★★★ | piano gratuito con limiti | Voci di Google Gemini dirette come un narratore italiano; legge un paragrafo per richiesta, con intonazione continua. |
 | **ElevenLabs** | ★★★★★ | a pagamento | La voce più realistica, quella delle app di audiolibri professionali. Scegli una voce italiana dalla Voice Library di ElevenLabs. |
 | **OpenAI** | ★★★★½ | a pagamento | Le chiediamo di leggere come un narratore italiano madrelingua e di recitare i dialoghi. |
 | **Google Cloud** (Chirp 3 HD) | ★★★★½ | piano gratuito mensile ampio | Voci italiane HD molto naturali. |
@@ -39,6 +40,7 @@ Narratore offre cinque motori vocali (Impostazioni ⚙️ › *Motore vocale*). 
 
 ### Chiavi API per i motori premium
 
+- **Gemini**: aistudio.google.com › *Get API key* (gratuita). Con il piano gratuito, se si raggiunge il limite di richieste al minuto, la lettura aspetta qualche secondo e riprende da sola.
 - **ElevenLabs**: elevenlabs.io › *Developers › API Keys*. Aggiungi alla tua libreria almeno una voce italiana (Voice Library, filtro lingua *Italiano*).
 - **OpenAI**: platform.openai.com › *API keys*.
 - **Google Cloud**: console.cloud.google.com › attiva *Cloud Text-to-Speech API* › *Credenziali › Crea chiave API*.
@@ -84,7 +86,11 @@ src/
   engines/
     webspeech.js       voci del dispositivo (con classifica di naturalezza)
     piper.js           voce neurale offline in un Web Worker
-    cloud.js           OpenAI, ElevenLabs, Google Cloud
+    cloud.js           Gemini, OpenAI, ElevenLabs, Google Cloud
+  views/
+    align.js           trova ogni frase nel testo del documento originale
+    pdf-view.js        pagine del PDF con la frase evidenziata
+    docx-view.js       documento Word formattato con la frase evidenziata
   storage.js           libreria, progressi e segnalibri (IndexedDB)
   sleep-timer.js       timer di spegnimento
 tests/                 test unitari (Vitest) ed end-to-end (Playwright)
