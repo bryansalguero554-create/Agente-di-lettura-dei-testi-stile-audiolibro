@@ -1,6 +1,22 @@
 // Motore neurale gratuito e offline (Piper) che gira interamente nel browser.
 // Ogni voce ha il proprio worker, così narratore e voce dei dialoghi restano caricati insieme.
 
+import { studioMaster, floatToWav } from './studio.js';
+
+/**
+ * Regia di Paola: ritmo da narratore un po' più disteso e intonazione più viva nelle
+ * domande e nelle esclamazioni (noise = variazione espressiva, noiseW = variazione del ritmo).
+ */
+export function piperProsody(ctx = {}) {
+  const p = { lengthScale: 1.06, noiseScale: 0.6, noiseW: 0.72 };
+  if (ctx.heading) Object.assign(p, { lengthScale: 1.14, noiseScale: 0.5 });
+  if (ctx.mood === 'question') Object.assign(p, { noiseScale: 0.7, noiseW: 0.8 });
+  if (ctx.mood === 'exclamation') Object.assign(p, { noiseScale: 0.74, lengthScale: 1.0 });
+  if (ctx.mood === 'suspense') Object.assign(p, { lengthScale: 1.12 });
+  if (ctx.dialogue) p.noiseScale += 0.05;
+  return p;
+}
+
 export const PIPER_VOICES = [
   { id: 'it_IT-paola-medium', label: 'Paola', badge: 'Neurale', size: 63.5, hint: 'Femminile, calda e chiara' },
   { id: 'it_IT-riccardo-x_low', label: 'Riccardo', badge: 'Neurale leggera', size: 28.1, hint: 'Maschile, più leggera ma meno definita' },
@@ -27,7 +43,7 @@ class PiperSession {
       if (!p) return;
       this.#pending.delete(data.id);
       if (data.type === 'error') p.reject(new Error(data.message));
-      else p.resolve(data.blob);
+      else p.resolve(data);
     };
     this.#worker.onerror = (e) => this.#rejectAll(new Error(e.message || 'Errore del motore neurale'));
     this.ready = voiceId
@@ -67,6 +83,8 @@ export class PiperEngine {
   label = 'Voce neurale gratuita (offline)';
   #sessions = new Map();
   onProgress = null;
+  /** @param {() => { studio?: boolean }} [getOptions] */
+  constructor(getOptions = () => ({})) { this.getOptions = getOptions; }
 
   async voices() {
     return PIPER_VOICES.map((v) => ({ id: v.id, label: v.label, badge: v.badge, hint: `${v.hint} · ${Math.round(v.size)} MB al primo uso` }));
@@ -94,7 +112,29 @@ export class PiperEngine {
 
   async synthesize(text, ctx = {}) {
     const session = await this.prepare(ctx.voice);
-    return session.call('synth', { text });
+    // il modello intona meglio se la frase finisce con la punteggiatura
+    const line = /[.!?…:;]["»”')]*$/.test(text.trim()) ? text : `${text.trim()}.`;
+    const { pcm, rate } = await session.call('synth', { text: line, opts: piperProsody(ctx) });
+    const out = this.getOptions().studio === false ? { pcm, rate } : await studioMaster(pcm, rate);
+    return floatToWav(out.pcm, out.rate);
+  }
+
+  /** Diagnostica: trasforma un testo in fonemi (non serve il modello vocale). */
+  async phonemes(text) {
+    const tmp = new PiperSession(null);
+    try {
+      const { ids } = await tmp.call('phonemes', {
+        text,
+        wasmPaths: {
+          onnxWasm: vendorUrl('ort/'),
+          piperData: vendorUrl('piper/piper_phonemize.data'),
+          piperWasm: vendorUrl('piper/piper_phonemize.wasm'),
+        },
+      });
+      return ids;
+    } finally {
+      tmp.dispose();
+    }
   }
 
   /** Cancella i modelli scaricati (utile se un download si è interrotto). */

@@ -33,6 +33,10 @@ jobs:
           npm i --no-save playwright@1.56.1
           npx playwright install --with-deps chromium
           npm run test:e2e
+        env:
+          # qui la rete è libera: si scarica la vera voce Paola e si pubblicano i campioni
+          PAOLA_REALE: '1'
+          CAMPIONI_DIR: dist/campioni
       - uses: actions/upload-pages-artifact@v3
         if: github.event_name != 'pull_request'
         with:

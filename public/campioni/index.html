@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Campioni di Paola · Narratore</title>
+  <style>
+    :root { --bg: #f6f1e7; --fg: #2a231b; --muted: #7b6f60; --card: #fffaf1; --line: #e2d7c4; --accent: #b5562b; color-scheme: light; }
+    @media (prefers-color-scheme: dark) { :root { --bg: #15120f; --fg: #ece3d4; --muted: #a39580; --card: #1f1a15; --line: #3a3127; --accent: #e3864f; color-scheme: dark; } }
+    body { margin: 0; background: var(--bg); color: var(--fg); font: 16px/1.5 system-ui, sans-serif; }
+    main { max-width: 640px; margin: 0 auto; padding: 32px 16px; display: grid; gap: 16px; }
+    h1 { font-family: Georgia, serif; margin: 0; }
+    p { margin: 0; color: var(--muted); }
+    section { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 16px; display: grid; gap: 8px; }
+    h2 { margin: 0; font-size: 17px; }
+    audio { width: 100%; }
+    a { color: var(--accent); }
+    blockquote { margin: 0; font-family: Georgia, serif; font-style: italic; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Campioni di Paola</h1>
+    <p>Generati automaticamente con la vera voce neurale a ogni pubblicazione dell'app.</p>
+    <blockquote>«La casa apparve all'improvviso dietro una curva, scura e silenziosa. "Siamo arrivati?" chiese Lucia. Il padre sorrise, senza voltarsi.»</blockquote>
+    <section>
+      <h2>Paola · voce da studio</h2>
+      <p>Ritmo da narratore, calore, niente asprezze, volume uniforme.</p>
+      <audio controls preload="none" src="paola-studio.wav"></audio>
+    </section>
+    <section>
+      <h2>Paola · originale</h2>
+      <p>La voce così come esce dal modello, senza rifinitura.</p>
+      <audio controls preload="none" src="paola-originale.wav"></audio>
+    </section>
+    <p><a href="../">← Torna all'app</a></p>
+  </main>
+</body>
+</html>

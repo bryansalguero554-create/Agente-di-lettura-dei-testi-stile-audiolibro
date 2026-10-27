@@ -21,7 +21,7 @@ const persist = () => saveSettings(settings);
 const engines = {
   device: new WebSpeechEngine(),
   puter: new PuterEngine(),
-  piper: new PiperEngine(),
+  piper: new PiperEngine(() => ({ studio: settings.piperStudio !== false })),
   openai: new OpenAIEngine(() => settings.keys.openai),
   elevenlabs: new ElevenLabsEngine(() => settings.keys.elevenlabs, () => settings.elevenModel),
   gemini: new GeminiEngine(() => settings.keys.gemini, () => settings.geminiModel),
@@ -40,7 +40,7 @@ const ENGINE_INFO = {
   piper: {
     title: 'Paola · voce neurale gratuita',
     tags: [['Gratis'], ['Offline']],
-    text: 'Voce neurale italiana che funziona nel browser, senza account. Si scarica una sola volta (circa 64 MB), poi funziona anche senza internet.',
+    text: 'Voce neurale italiana che funziona nel browser, senza account né limiti. Ritmo da narratore e rifinitura "da studio" (calore, niente asprezze, volume uniforme). Si scarica una sola volta (circa 64 MB), poi funziona anche senza internet.',
   },
   device: {
     title: 'Voci del dispositivo',
@@ -690,6 +690,8 @@ async function renderVoiceControls() {
   const dialogueDefault = settings.dialogueVoices[engine.id] || voices.find((v) => v.id !== selected)?.id || selected;
   fillVoiceSelect(dlgSel, voices, dialogueDefault);
   $('#voice-hint').textContent = voices.find((v) => v.id === selected)?.hint || '';
+  $('#studio-row').hidden = engine.id !== 'piper';
+  $('#studio-toggle').checked = settings.piperStudio !== false;
   $('#dialogue-row').hidden = !settings.dialogueVoiceEnabled;
 }
 
@@ -850,6 +852,11 @@ $('#dialogue-toggle').addEventListener('change', (e) => {
 $('#eleven-model').addEventListener('change', (e) => {
   settings[settings.engine === 'gemini' ? 'geminiModel' : 'elevenModel'] = e.target.value;
   engines.gemini.resetModel();
+  persist();
+  player.clearCache();
+});
+$('#studio-toggle').addEventListener('change', (e) => {
+  settings.piperStudio = e.target.checked;
   persist();
   player.clearCache();
 });

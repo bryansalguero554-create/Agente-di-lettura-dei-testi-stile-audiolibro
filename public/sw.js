@@ -1,5 +1,5 @@
 // Service worker: rende l'app disponibile anche offline dopo la prima visita.
-const CACHE = 'narratore-v2';
+const CACHE = 'narratore-v3';
 
 self.addEventListener('install', () => self.skipWaiting());
 self.addEventListener('activate', (event) => {
@@ -14,6 +14,8 @@ self.addEventListener('fetch', (event) => {
   const req = event.request;
   const url = new URL(req.url);
   if (req.method !== 'GET' || url.origin !== self.location.origin) return;
+  // i campioni audio cambiano a ogni pubblicazione: sempre dalla rete
+  if (url.pathname.includes('/campioni/')) return;
 
   // pagina: prima la rete (aggiornamenti), poi la cache
   if (req.mode === 'navigate') {

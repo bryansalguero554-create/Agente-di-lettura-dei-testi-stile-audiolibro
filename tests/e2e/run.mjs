@@ -397,12 +397,44 @@ async function main() {
     assert(await page.evaluate(() => window.__narratore.player.state) === 'paused', 'stato dopo errore');
   });
 
+  await step('la voce neurale trasforma l\'italiano in fonemi nel browser', async () => {
+    const ids = await page.evaluate(() => window.__narratore.engines.piper.phonemes('Che bella giornata, disse Lucia.'));
+    assert(Array.isArray(ids) && ids.length > 20, `fonemi: ${JSON.stringify(ids)?.slice(0, 80)}`);
+  });
+
   await step('i file WebAssembly della voce neurale sono serviti dall\'app', async () => {
     for (const f of ['vendor/ort/ort-wasm-simd-threaded.wasm', 'vendor/piper/piper_phonemize.wasm', 'vendor/piper/piper_phonemize.data', 'manifest.webmanifest', 'sw.js']) {
       const res = await page.request.get(url + f);
       assert(res.ok(), `${f}: ${res.status()}`);
     }
   });
+
+  if (process.env.PAOLA_REALE) {
+    console.log('\nPaola vera (modello scaricato)');
+    const ctx2 = await browser.newContext();
+    const p2 = await ctx2.newPage();
+    await p2.goto(url);
+    await step('Paola genera la voce vera, con e senza rifinitura da studio', async () => {
+      const text = 'La casa apparve all\'improvviso dietro una curva, scura e silenziosa. «Siamo arrivati?» chiese Lucia. Il padre sorrise, senza voltarsi.';
+      const res = await p2.evaluate(async (t) => {
+        const { engines, settings } = window.__narratore;
+        const toB64 = (blob) => new Promise((r) => { const fr = new FileReader(); fr.onload = () => r(fr.result.split(',')[1]); fr.readAsDataURL(blob); });
+        settings.piperStudio = true;
+        const studio = await engines.piper.synthesize(t, {});
+        settings.piperStudio = false;
+        const raw = await engines.piper.synthesize(t, {});
+        return { studio: await toB64(studio), raw: await toB64(raw) };
+      }, text);
+      const studio = Buffer.from(res.studio, 'base64');
+      const raw = Buffer.from(res.raw, 'base64');
+      assert(studio.length > 100000 && raw.length > 50000, `dimensioni: ${studio.length} / ${raw.length}`);
+      const dir = process.env.CAMPIONI_DIR || out;
+      mkdirSync(dir, { recursive: true });
+      writeFileSync(join(dir, 'paola-studio.wav'), studio);
+      writeFileSync(join(dir, 'paola-originale.wav'), raw);
+    });
+    await ctx2.close();
+  }
 
   console.log('\nDesktop');
   const desk = await browser.newContext({ viewport: { width: 1280, height: 860 } });

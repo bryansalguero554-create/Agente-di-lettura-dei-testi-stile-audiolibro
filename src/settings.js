@@ -18,6 +18,7 @@ export const DEFAULTS = {
   elevenModel: 'eleven_multilingual_v2',
   geminiModel: 'gemini-3.8-flash-tts',
   piperConsent: false,
+  piperStudio: true, // rifinitura "da studio" della voce Paola
 };
 
 export function loadSettings() {
