@@ -244,7 +244,9 @@ export class GoogleEngine {
 // ---------------------------------------------------------------- Gemini (Google AI Studio)
 
 export const GEMINI_MODELS = [
-  ['gemini-3.1-flash-tts-preview', 'Gemini 3.1 Flash TTS · la più recente'],
+  ['gemini-3.8-flash-tts', 'Gemini 3.8 Flash TTS · la più naturale'],
+  ['gemini-3.8-flash-lite-tts', 'Gemini 3.8 Flash-Lite TTS · più veloce ed economica'],
+  ['gemini-3.1-flash-tts-preview', 'Gemini 3.1 Flash TTS (anteprima)'],
   ['gemini-2.5-pro-preview-tts', 'Gemini 2.5 Pro TTS · massima qualità'],
   ['gemini-2.5-flash-preview-tts', 'Gemini 2.5 Flash TTS · veloce'],
 ];
@@ -300,8 +302,27 @@ export class GeminiEngine {
     if (!this.getKey()) throw new Error('Inserisci la chiave API di Gemini (Google AI Studio) nelle impostazioni.');
   }
 
-  synthesize(text, ctx = {}) {
-    const model = this.getModel() || GEMINI_MODELS[0][0];
+  async synthesize(text, ctx = {}) {
+    // se il modello scelto non è disponibile per questa chiave si prova il successivo
+    const chosen = this.workingModel || this.getModel() || GEMINI_MODELS[0][0];
+    const candidates = [chosen, ...GEMINI_MODELS.map(([id]) => id).filter((id) => id !== chosen)];
+    let lastError;
+    for (const model of candidates) {
+      try {
+        const blob = await this.#synthesizeWith(model, text, ctx);
+        this.workingModel = model;
+        return blob;
+      } catch (err) {
+        if (!err.modelUnavailable) throw err;
+        lastError = err;
+      }
+    }
+    throw lastError;
+  }
+
+  resetModel() { this.workingModel = null; }
+
+  #synthesizeWith(model, text, ctx) {
     return withRetry(async () => {
       const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
         method: 'POST',
@@ -319,9 +340,13 @@ export class GeminiEngine {
         // piano gratuito: si attende che si liberi la quota al minuto e si riprova
         const wait = Number(res.headers.get('retry-after')) || 20;
         await new Promise((r) => setTimeout(r, wait * 1000));
-        return this.synthesize(text, { ...ctx, attempt: (ctx.attempt || 0) + 1 });
+        return this.#synthesizeWith(model, text, { ...ctx, attempt: (ctx.attempt || 0) + 1 });
       }
-      if (res.status === 404) throw new Error(`Gemini: il modello ${model} non è disponibile per questa chiave. Scegline un altro nelle impostazioni.`);
+      if (res.status === 404) {
+        const err = new Error(`Gemini: nessun modello vocale disponibile per questa chiave (ultimo provato: ${model}).`);
+        err.modelUnavailable = true;
+        throw err;
+      }
       if (!res.ok) throw await apiError(res, 'Gemini');
       const json = await res.json();
       const part = json.candidates?.[0]?.content?.parts?.find((p) => p.inlineData?.data);

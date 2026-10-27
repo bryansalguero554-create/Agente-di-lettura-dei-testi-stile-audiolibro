@@ -25,7 +25,7 @@ Narratore offre cinque motori vocali (Impostazioni ⚙️ › *Motore vocale*). 
 
 | Motore | Qualità | Costo | Note |
 |---|---|---|---|
-| **Gemini** (Google AI Studio) | ★★★★★ | piano gratuito con limiti | Voci di Google Gemini dirette come un narratore italiano; legge un paragrafo per richiesta, con intonazione continua. |
+| **Gemini 3.8 Flash TTS** (Google AI Studio) | ★★★★★ | piano gratuito con limiti | La voce più naturale: modello Gemini 3.8 diretto come un narratore italiano; legge un paragrafo per richiesta, con intonazione continua. |
 | **ElevenLabs** | ★★★★★ | a pagamento | La voce più realistica, quella delle app di audiolibri professionali. Scegli una voce italiana dalla Voice Library di ElevenLabs. |
 | **OpenAI** | ★★★★½ | a pagamento | Le chiediamo di leggere come un narratore italiano madrelingua e di recitare i dialoghi. |
 | **Google Cloud** (Chirp 3 HD) | ★★★★½ | piano gratuito mensile ampio | Voci italiane HD molto naturali. |

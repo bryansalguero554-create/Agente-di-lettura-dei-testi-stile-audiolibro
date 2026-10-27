@@ -76,3 +76,22 @@ describe('lettura a paragrafi', () => {
     expect(player.groupEnd(0, 1)).toBe(1);
   });
 });
+
+describe('Gemini: scelta del modello', () => {
+  it('usa Gemini 3.8 Flash TTS e ripiega su un altro modello se non è disponibile', async () => {
+    const { GeminiEngine } = await import('../src/engines/cloud.js');
+    const calls = [];
+    const pcm = btoa(String.fromCharCode(...new Uint8Array(48)));
+    globalThis.fetch = async (url) => {
+      calls.push(url.match(/models\/([^:]+)/)[1]);
+      if (calls.length === 1) return new Response('{}', { status: 404 });
+      return new Response(JSON.stringify({ candidates: [{ content: { parts: [{ inlineData: { mimeType: 'audio/L16;codec=pcm;rate=24000', data: pcm } }] } }] }));
+    };
+    const engine = new GeminiEngine(() => 'k', () => undefined);
+    const blob = await engine.synthesize('Ciao.');
+    expect(calls).toEqual(['gemini-3.8-flash-tts', 'gemini-3.8-flash-lite-tts']);
+    expect(blob.type).toBe('audio/wav');
+    await engine.synthesize('Ancora.');
+    expect(calls.at(-1)).toBe('gemini-3.8-flash-lite-tts'); // ricorda il modello che funziona
+  });
+});

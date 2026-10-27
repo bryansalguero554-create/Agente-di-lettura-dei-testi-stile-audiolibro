@@ -16,13 +16,15 @@ export const DEFAULTS = {
   viewMode: 'original', // 'original' = PDF/Word come appare; 'text' = solo testo
   keys: { openai: '', elevenlabs: '', google: '', gemini: '' },
   elevenModel: 'eleven_multilingual_v2',
-  geminiModel: 'gemini-3.1-flash-tts-preview',
+  geminiModel: 'gemini-3.8-flash-tts',
   piperConsent: false,
 };
 
 export function loadSettings() {
   try {
     const saved = JSON.parse(localStorage.getItem(KEY) || '{}');
+    // chi aveva il vecchio modello predefinito passa al nuovo, più naturale
+    if (saved.geminiModel === 'gemini-3.1-flash-tts-preview') saved.geminiModel = DEFAULTS.geminiModel;
     return { ...DEFAULTS, ...saved, keys: { ...DEFAULTS.keys, ...saved.keys } };
   } catch {
     return structuredClone(DEFAULTS);

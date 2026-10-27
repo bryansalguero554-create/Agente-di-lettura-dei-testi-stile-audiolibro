@@ -833,6 +833,7 @@ $('#dialogue-toggle').addEventListener('change', (e) => {
 });
 $('#eleven-model').addEventListener('change', (e) => {
   settings[settings.engine === 'gemini' ? 'geminiModel' : 'elevenModel'] = e.target.value;
+  engines.gemini.resetModel();
   persist();
   player.clearCache();
 });
