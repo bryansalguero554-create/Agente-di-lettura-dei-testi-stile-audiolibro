@@ -320,7 +320,7 @@ async function main() {
   });
   await step('con la chiave OpenAI legge con istruzioni da narratore italiano', async () => {
     await page.click('[aria-label="Impostazioni"] >> nth=1');
-    await page.locator('.engine', { hasText: 'OpenAI' }).click();
+    await page.locator('.engine:has(strong:text-is("OpenAI"))').click();
     await page.fill('#api-key', 'sk-test');
     await page.click('[data-action="save-key"]');
     await page.keyboard.press('Escape');
@@ -350,7 +350,7 @@ async function main() {
       body: JSON.stringify({ error: { code: 429, message: 'Quota exceeded for metric: generate_content_free_tier_requests, limit: 0' } }),
     }));
     await page.click('[aria-label="Impostazioni"] >> nth=1');
-    await page.locator('.engine', { hasText: 'Gemini' }).click();
+    await page.locator('.engine:has(strong:text-is("Gemini"))').click();
     await page.fill('#api-key', 'chiave-gratuita');
     await page.click('[data-action="save-key"]');
     await page.keyboard.press('Escape');
@@ -361,6 +361,25 @@ async function main() {
     const engine = await page.evaluate(() => window.__narratore.settings.engine);
     assert(engine === 'device', `motore dopo il ripiego: ${engine}`);
     await page.evaluate(() => window.__narratore.player.pause());
+  });
+
+  console.log('\nVoci premium gratis (Puter simulato)');
+  await step('legge con le voci premium gratuite senza chiavi', async () => {
+    const wavB64 = silentWav(0.1).toString('base64');
+    await page.evaluate((b64) => {
+      window.__puterCalls = [];
+      window.puter = { ai: { txt2speech: async (text, opts) => { window.__puterCalls.push({ text, opts }); return { src: `data:audio/wav;base64,${b64}` }; } } };
+    }, wavB64);
+    await page.click('[aria-label="Impostazioni"] >> nth=1');
+    await page.locator('.engine:has(strong:text-is("Voci premium gratis"))').click();
+    await page.keyboard.press('Escape');
+    await page.evaluate(() => window.__narratore.player.seek(1, 0));
+    await page.click('#play-btn');
+    await page.waitForFunction(() => window.__puterCalls.length >= 2, null, { timeout: 20000 });
+    await page.evaluate(() => window.__narratore.player.pause());
+    const calls = await page.evaluate(() => window.__puterCalls);
+    assert(calls[0].opts.provider === 'openai' && calls[0].opts.voice === 'marin', JSON.stringify(calls[0].opts));
+    assert(calls.some((c) => c.text.includes('La notte passò in silenzio')), JSON.stringify(calls.map((c) => c.text)));
   });
 
   console.log('\nVoce neurale offline (Piper)');

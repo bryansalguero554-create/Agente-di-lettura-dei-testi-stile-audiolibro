@@ -138,3 +138,44 @@ describe('Gemini: chiave gratuita', () => {
     expect(calls.length).toBeGreaterThan(2); // ha provato tutti i modelli, senza attese
   });
 });
+
+describe('audio pulito', () => {
+  it('toglie il blocco di firma C2PA e aggiunge le dissolvenze', async () => {
+    const { cleanWav, pcmToWav } = await import('../src/engines/cloud.js');
+    const pcm = new Uint8Array(2000).fill(0x40); // campioni costanti non nulli
+    const wav = new Uint8Array(await pcmToWav(pcm, 24000).arrayBuffer());
+    const c2pa = new Uint8Array(16);
+    c2pa.set([0x43, 0x32, 0x50, 0x41, 8, 0, 0, 0]); // chunk "C2PA" di 8 byte
+    const withSig = new Uint8Array(wav.length + 16);
+    withSig.set(wav);
+    withSig.set(c2pa, wav.length);
+    const out = new Uint8Array(await cleanWav(withSig).arrayBuffer());
+    expect(out.length).toBe(44 + 2000);
+    const samples = new Int16Array(out.buffer, 44);
+    expect(samples[0]).toBe(0); // dissolvenza in entrata
+    expect(samples[samples.length - 1]).toBe(0); // e in uscita
+    expect(samples[500]).toBe(0x4040);
+  });
+});
+
+describe('voci premium gratuite (Puter)', () => {
+  it('usa il fornitore scelto senza chiavi e restituisce audio', async () => {
+    const { PuterEngine } = await import('../src/engines/puter.js');
+    const calls = [];
+    const fakePuter = { ai: { txt2speech: async (text, opts) => { calls.push({ text, opts }); return { src: 'data:audio/mpeg;base64,SUQz' }; } } };
+    globalThis.fetch = async () => new Response(new Uint8Array([1, 2, 3])); // lettura del data: URL
+    const engine = new PuterEngine(async () => fakePuter);
+    const blob = await engine.synthesize('Era notte.', { voice: 'openai:cedar', dialogue: true });
+    expect(blob.size).toBe(3);
+    expect(calls[0].opts).toMatchObject({ provider: 'openai', voice: 'cedar', model: 'gpt-4o-mini-tts' });
+    expect(calls[0].opts.instructions).toMatch(/italian/);
+    await engine.synthesize('Ciao.', { voice: 'gemini:Sulafat' });
+    expect(calls[1].opts).toMatchObject({ provider: 'gemini', voice: 'Sulafat' });
+  });
+
+  it('spiega quando i crediti gratuiti sono finiti', async () => {
+    const { PuterEngine } = await import('../src/engines/puter.js');
+    const engine = new PuterEngine(async () => ({ ai: { txt2speech: async () => { throw { message: 'insufficient funds' }; } } }));
+    await expect(engine.synthesize('x')).rejects.toMatchObject({ code: 'voice-unavailable' });
+  });
+});

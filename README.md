@@ -25,6 +25,7 @@ Narratore offre cinque motori vocali (Impostazioni ⚙️ › *Motore vocale*). 
 
 | Motore | Qualità | Costo | Note |
 |---|---|---|---|
+| **Voci premium gratis** (Puter) | ★★★★★ | gratis, senza chiavi | Le voci di OpenAI, Gemini ed ElevenLabs tramite Puter: al primo ascolto accedi a Puter o continua come ospite; Puter assegna crediti gratuiti a ogni utente. |
 | **Gemini 3.8 Flash TTS** (Google AI Studio) | ★★★★★ | piano gratuito con limiti | La voce più naturale: modello Gemini 3.8 diretto come un narratore italiano; legge un paragrafo per richiesta, con intonazione continua. |
 | **ElevenLabs** | ★★★★★ | a pagamento | La voce più realistica, quella delle app di audiolibri professionali. Scegli una voce italiana dalla Voice Library di ElevenLabs. |
 | **OpenAI** | ★★★★½ | a pagamento | Le chiediamo di leggere come un narratore italiano madrelingua e di recitare i dialoghi. |
@@ -84,7 +85,8 @@ src/
   engines/
     webspeech.js       voci del dispositivo (con classifica di naturalezza)
     piper.js           voce neurale offline in un Web Worker
-    cloud.js           Gemini, OpenAI, ElevenLabs
+    cloud.js           Gemini, OpenAI, ElevenLabs (con chiave) e pulizia dell'audio
+    puter.js           voci premium gratuite tramite Puter
   views/
     align.js           trova ogni frase nel testo del documento originale
     pdf-view.js        pagine del PDF con la frase evidenziata

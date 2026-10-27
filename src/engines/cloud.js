@@ -214,6 +214,51 @@ export function pcmToWav(bytes, sampleRate = 24000) {
   return new Blob([header.buffer, bytes], { type: 'audio/wav' });
 }
 
+/**
+ * Ripulisce un WAV restituito da un servizio: tiene solo formato e campioni audio (Gemini
+ * aggiunge in coda un blocco di firma "C2PA" che alcuni lettori suonano come rumore) e
+ * applica una brevissima dissolvenza a inizio e fine per evitare i "click" tra i blocchi.
+ * @param {Uint8Array} bytes
+ * @returns {Blob}
+ */
+export function cleanWav(bytes) {
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const tag = (o) => String.fromCharCode(bytes[o], bytes[o + 1], bytes[o + 2], bytes[o + 3]);
+  if (bytes.length < 12 || tag(0) !== 'RIFF' || tag(8) !== 'WAVE') return new Blob([bytes], { type: 'audio/wav' });
+  let rate = 24000;
+  let bits = 16;
+  let channels = 1;
+  let pcm = null;
+  for (let o = 12; o + 8 <= bytes.length;) {
+    const id = tag(o);
+    const size = view.getUint32(o + 4, true);
+    if (id === 'fmt ') {
+      channels = view.getUint16(o + 10, true);
+      rate = view.getUint32(o + 12, true);
+      bits = view.getUint16(o + 22, true);
+    } else if (id === 'data') {
+      pcm = bytes.slice(o + 8, Math.min(bytes.length, o + 8 + size));
+      break;
+    }
+    o += 8 + size + (size % 2);
+  }
+  if (!pcm || bits !== 16 || channels !== 1) return new Blob([bytes], { type: 'audio/wav' });
+  return pcmToWav(fadeEdges(pcm, rate), rate);
+}
+
+/** Dissolvenza di 8 ms in entrata e in uscita su PCM 16 bit mono. */
+export function fadeEdges(pcm, rate) {
+  const out = pcm.slice(0, pcm.length - (pcm.length % 2));
+  const samples = new Int16Array(out.buffer, out.byteOffset, out.length / 2);
+  const n = Math.min(Math.floor(rate * 0.008), Math.floor(samples.length / 2));
+  for (let i = 0; i < n; i++) {
+    const k = i / n;
+    samples[i] = Math.round(samples[i] * k);
+    samples[samples.length - 1 - i] = Math.round(samples[samples.length - 1 - i] * k);
+  }
+  return out;
+}
+
 // risposte di Google per i modelli non inclusi nel piano gratuito
 const GEMINI_PAID_ONLY = /limit:\s*0\b|billing|paid (tier|plan|account)|requires? (a )?paid|not available (on|for) (the )?free/i;
 const EXHAUSTED_KEY = 'narratore.gemini.esauriti';
@@ -333,9 +378,10 @@ export class GeminiEngine {
       const mime = (part.inlineData.mimeType || '').toLowerCase();
       const bytes = Uint8Array.from(atob(part.inlineData.data), (c) => c.charCodeAt(0));
       // alcuni modelli restituiscono già un file audio (WAV/MP3), altri PCM grezzo
-      if (/wav|mpeg|mp3|ogg/.test(mime)) return new Blob([bytes], { type: mime.split(';')[0] });
+      if (/wav/.test(mime)) return cleanWav(bytes);
+      if (/mpeg|mp3|ogg/.test(mime)) return new Blob([bytes], { type: mime.split(';')[0] });
       const rate = Number(mime.match(/rate=(\d+)/)?.[1]) || 24000;
-      return pcmToWav(bytes, rate);
+      return pcmToWav(fadeEdges(bytes, rate), rate);
     });
   }
 }

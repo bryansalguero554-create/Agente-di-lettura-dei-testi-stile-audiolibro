@@ -6,6 +6,7 @@ import { openFile, loadPdfjs } from './parsers/index.js';
 import { globalIndex, totalSentences, remainingChars } from './book.js';
 import { WebSpeechEngine, isSupported as webSpeechSupported, listItalianVoices } from './engines/webspeech.js';
 import { PiperEngine, PIPER_VOICES } from './engines/piper.js';
+import { PuterEngine } from './engines/puter.js';
 import { OpenAIEngine, ElevenLabsEngine, GeminiEngine, ELEVEN_MODELS, GEMINI_MODELS } from './engines/cloud.js';
 import { normalizeForSpeech } from './text/normalize-it.js';
 
@@ -19,6 +20,7 @@ const persist = () => saveSettings(settings);
 
 const engines = {
   device: new WebSpeechEngine(),
+  puter: new PuterEngine(),
   piper: new PiperEngine(),
   openai: new OpenAIEngine(() => settings.keys.openai),
   elevenlabs: new ElevenLabsEngine(() => settings.keys.elevenlabs, () => settings.elevenModel),
@@ -30,6 +32,11 @@ engines.gemini.onModelFallback = (model) => {
 };
 
 const ENGINE_INFO = {
+  puter: {
+    title: 'Voci premium gratis',
+    tags: [['Gratis', 'best'], ['Senza chiavi']],
+    text: 'Le voci di OpenAI, Gemini ed ElevenLabs senza chiavi API e senza pagare, tramite Puter. Al primo ascolto si apre una finestra di Puter: accedi o continua come ospite. Puter offre a ogni utente crediti gratuiti; se finiscono, la lettura continua con una voce gratuita del dispositivo.',
+  },
   piper: {
     title: 'Paola · voce neurale gratuita',
     tags: [['Gratis'], ['Offline']],
@@ -64,7 +71,7 @@ const ENGINE_INFO = {
 };
 // versione di prova ospitata dove la rete esterna è bloccata: solo voci del dispositivo
 const LIMITED = import.meta.env.VITE_LIMITED === '1';
-const ENGINE_ORDER = LIMITED ? ['device'] : ['gemini', 'piper', 'device', 'elevenlabs', 'openai'];
+const ENGINE_ORDER = LIMITED ? ['device'] : ['puter', 'gemini', 'piper', 'device', 'elevenlabs', 'openai'];
 
 const player = new Player({ settings: () => settings });
 const timer = new SleepTimer(player);
@@ -140,7 +147,7 @@ async function chooseDefaultEngine() {
   if (settings.engine) return;
   // le voci di sistema di alta qualità (Edge Natural, Apple Premium) sono la scelta più immediata
   const voices = webSpeechSupported() ? await listItalianVoices() : [];
-  settings.engine = voices[0]?.score >= 40 ? 'device' : 'piper';
+  settings.engine = voices[0]?.score >= 40 ? 'device' : 'puter';
   persist();
 }
 
@@ -717,7 +724,7 @@ player.addEventListener('position', updatePosition);
 player.addEventListener('state', updatePlayButton);
 player.addEventListener('error', async ({ detail }) => {
   // Gemini non disponibile per la chiave: si continua con una voce gratuita invece di fermarsi
-  if (detail.code === 'gemini-unavailable' && settings.engine === 'gemini') {
+  if ((detail.code === 'gemini-unavailable' || detail.code === 'voice-unavailable') && ['gemini', 'puter'].includes(settings.engine)) {
     const voices = webSpeechSupported() ? await listItalianVoices() : [];
     const next = voices[0]?.score >= 40 || (!settings.piperConsent && voices.length) ? 'device' : 'piper';
     await selectEngine(next);
