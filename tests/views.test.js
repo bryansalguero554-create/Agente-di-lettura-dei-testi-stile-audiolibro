@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { squash, buildStream, alignBook, sentenceAtPosition } from '../src/views/align.js';
 import { mergeLines } from '../src/views/pdf-view.js';
 import { buildBook } from '../src/book.js';
-import { geminiPrompt, pcmToWav, GEMINI_MODELS } from '../src/engines/cloud.js';
+import { geminiDirection, pcmToWav, GEMINI_MODELS } from '../src/engines/cloud.js';
 import { Player } from '../src/player.js';
 
 describe('allineamento con il documento originale', () => {
@@ -42,12 +42,28 @@ describe('allineamento con il documento originale', () => {
 });
 
 describe('Gemini', () => {
-  it('chiede una lettura da narratore italiano', () => {
-    const p = geminiPrompt('Ciao.', { dialogue: true });
-    expect(p).toMatch(/accento italiano madrelingua/);
-    expect(p).toMatch(/dialoghi/);
-    expect(p.endsWith(':\nCiao.')).toBe(true);
+  it('dà la regia separata dal testo da leggere', async () => {
+    const d = geminiDirection({ dialogue: true });
+    expect(d).toMatch(/accento italiano madrelingua/);
+    expect(d).toMatch(/dialoghi/);
     expect(GEMINI_MODELS[0][0]).toMatch(/tts/);
+    const { GeminiEngine } = await import('../src/engines/cloud.js');
+    const bodies = [];
+    const pcm = btoa(String.fromCharCode(...new Uint8Array(48)));
+    globalThis.fetch = async (url, opts) => {
+      const body = JSON.parse(opts.body);
+      bodies.push(body);
+      if (body.systemInstruction) return new Response('{"error":{"message":"Developer instruction is not enabled"}}', { status: 400 });
+      return new Response(JSON.stringify({ candidates: [{ content: { parts: [{ inlineData: { mimeType: 'audio/L16;rate=24000', data: pcm } }] } }] }));
+    };
+    const engine = new GeminiEngine(() => 'k', () => undefined);
+    await engine.synthesize('Era notte.');
+    // il testo letto è solo quello del libro
+    expect(bodies[0].contents[0].parts[0].text).toBe('Era notte.');
+    expect(bodies[0].systemInstruction.parts[0].text).toMatch(/narratore/);
+    // il modello non accetta istruzioni: riprova con il solo testo
+    expect(bodies[1].systemInstruction).toBeUndefined();
+    expect(bodies[1].contents[0].parts[0].text).toBe('Era notte.');
   });
 
   it('trasforma il PCM in WAV', async () => {

@@ -264,13 +264,17 @@ const GEMINI_VOICES = [
   ['Fenrir', 'Maschile, energica'], ['Zubenelgenubi', 'Maschile, informale'], ['Sadachbia', 'Maschile, vivace'],
 ];
 
-/** Istruzione di regia per Gemini: il testo da leggere segue dopo i due punti. */
-export function geminiPrompt(text, ctx = {}) {
-  let style = 'Leggi in italiano, con accento italiano madrelingua e pronuncia standard, come un narratore professionista di audiolibri';
-  if (ctx.heading) style += ', annunciando con calma il titolo del capitolo';
-  else style += ': tono caldo e coinvolgente, ritmo calmo, pause naturali alla punteggiatura';
-  if (ctx.dialogue) style += ', e interpreta i dialoghi come un attore, con l\'emozione suggerita dal contenuto ma senza esagerare';
-  return `${style}:\n${text}`;
+/**
+ * Regia per Gemini. Va nelle istruzioni di sistema, separata dal testo, perché messa
+ * nel testo il modello a volte la leggeva ad alta voce.
+ */
+export function geminiDirection(ctx = {}) {
+  let style = 'Sei la voce di un audiolibro. Pronuncia ad alta voce SOLO il testo che ricevi, parola per parola, '
+    + 'senza aggiungere, commentare o leggere queste istruzioni. Parla in italiano con accento italiano madrelingua e '
+    + 'pronuncia standard, come un narratore professionista: tono caldo e coinvolgente, ritmo calmo, pause naturali alla punteggiatura';
+  if (ctx.heading) style += '. Il testo è il titolo di un capitolo: annuncialo con calma';
+  if (ctx.dialogue) style += '. Interpreta i dialoghi come un attore, con l\'emozione suggerita dal contenuto ma senza esagerare';
+  return `${style}.`;
 }
 
 /** Avvolge il PCM 16 bit restituito da Gemini in un file WAV riproducibile. */
@@ -337,7 +341,8 @@ export class GeminiEngine {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'x-goog-api-key': this.getKey() },
         body: JSON.stringify({
-          contents: [{ parts: [{ text: geminiPrompt(text, ctx) }] }],
+          ...(this.noDirection ? {} : { systemInstruction: { parts: [{ text: geminiDirection(ctx) }] } }),
+          contents: [{ role: 'user', parts: [{ text }] }],
           generationConfig: {
             responseModalities: ['AUDIO'],
             speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: ctx.voice || this.bestVoiceId() } } },
@@ -346,6 +351,11 @@ export class GeminiEngine {
         signal: ctx.signal,
       });
       const body = res.ok ? '' : await res.clone().text();
+      // alcuni modelli vocali non accettano istruzioni di sistema: si legge il testo e basta
+      if (res.status === 400 && !this.noDirection && /system|instruction/i.test(body)) {
+        this.noDirection = true;
+        return this.#synthesizeWith(model, text, ctx);
+      }
       // modello escluso dal piano gratuito (quota zero o fatturazione richiesta): si passa al successivo
       if ([400, 403, 429].includes(res.status) && GEMINI_PAID_ONLY.test(body)) {
         const err = new Error(`Gemini: il modello ${model} richiede una chiave con fatturazione attiva.`);
