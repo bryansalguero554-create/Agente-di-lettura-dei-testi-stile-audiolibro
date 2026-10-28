@@ -36,28 +36,64 @@ describe('voce da studio', () => {
 });
 
 describe('intonazione delle domande', async () => {
-  const { pitchContour, questionRise } = await import('../src/engines/studio.js');
-  // frequenza stimata dai passaggi per lo zero in una finestra
-  const freq = (pcm, rate, from, to) => {
-    let z = 0;
-    for (let i = from + 1; i < to; i++) if ((pcm[i - 1] < 0) !== (pcm[i] < 0)) z++;
-    return (z / 2) / ((to - from) / rate);
+  const { pitchContour, questionRise, questionContour, trackPeriods } = await import('../src/engines/studio.js');
+  const rate = 22050;
+
+  // vocale sintetica: impulsi glottali a f0 filtrati da una risonanza (formante) a 900 Hz
+  function vowel(f0, seconds = 1) {
+    const n = Math.round(rate * seconds);
+    const x = new Float32Array(n);
+    const T = rate / f0;
+    let y1 = 0;
+    let y2 = 0;
+    const r = 0.97;
+    const w = (2 * Math.PI * 900) / rate;
+    for (let i = 0; i < n; i++) {
+      const pulse = i % Math.round(T) === 0 ? 1 : 0;
+      const y = pulse + 2 * r * Math.cos(w) * y1 - r * r * y2;
+      y2 = y1;
+      y1 = y;
+      x[i] = y * 0.05;
+    }
+    return x;
+  }
+  const f0At = (x, a, b) => {
+    const { periods } = trackPeriods(x.subarray(a, b), rate);
+    const v = periods.filter(Boolean).sort((p, q) => p - q);
+    return rate / v[Math.floor(v.length / 2)];
+  };
+  // frequenza in cui cade la maggior parte dell'energia sopra i 400 Hz (la formante)
+  const formant = (x, a, b) => {
+    let best = 0;
+    let bestF = 0;
+    for (let f = 400; f < 2000; f += 20) {
+      let re = 0;
+      let im = 0;
+      for (let i = a; i < b; i++) { re += x[i] * Math.cos((2 * Math.PI * f * i) / rate); im += x[i] * Math.sin((2 * Math.PI * f * i) / rate); }
+      const p = re * re + im * im;
+      if (p > best) { best = p; bestF = f; }
+    }
+    return bestF;
   };
 
-  it('alza la voce alla fine senza cambiare la durata', () => {
-    const rate = 22050;
-    const pcm = Float32Array.from({ length: rate }, (_, i) => 0.5 * Math.sin((2 * Math.PI * 200 * i) / rate));
-    const out = pitchContour(pcm, rate, { peak: 1.22 });
-    expect(out.length).toBe(pcm.length);
-    const start = freq(out, rate, 1000, 8000);
-    const end = freq(out, rate, rate - 3000, rate - 1200);
-    expect(start).toBeGreaterThan(190);
-    expect(start).toBeLessThan(210);
-    expect(end / start).toBeGreaterThan(1.15);
+  it('alza la nota alla fine senza cambiare durata né timbro', () => {
+    const x = vowel(150);
+    const out = pitchContour(x, rate, questionContour('«Siamo arrivati?»'));
+    expect(out.length).toBe(x.length);
+    const startF0 = f0At(out, 2000, 7000);
+    const endF0 = f0At(out, rate - 2500, rate - 300);
+    expect(startF0).toBeGreaterThan(140);
+    expect(startF0).toBeLessThan(160);
+    expect(endF0 / startF0).toBeGreaterThan(1.1);
+    // il timbro (formante) resta dov'era: il vecchio metodo lo spostava del 20%
+    const fA = formant(x, rate - 2500, rate - 300);
+    const fB = formant(out, rate - 2500, rate - 300);
+    expect(Math.abs(fB - fA) / fA).toBeLessThan(0.08);
   });
 
   it('domande sì/no salgono più di quelle con chi/come/dove', () => {
     expect(questionRise('«Siamo arrivati?»')).toBeGreaterThan(questionRise('Dove vai?'));
-    expect(questionRise('Perché sei qui?')).toBeLessThan(1.2);
+    expect(questionRise('Perché sei qui?')).toBeLessThan(1.1);
+    expect(questionContour('Siamo arrivati?')(0.3)).toBe(1); // l'inizio della frase non cambia
   });
 });

@@ -69,7 +69,7 @@ function roomImpulse(ctx, seconds = 0.32) {
  */
 export async function studioMaster(pcm, rate, { question = null } = {}) {
   let trimmed = trimSilence(pcm, rate);
-  if (question) trimmed = pitchContour(trimmed, rate, { peak: questionRise(question) });
+  if (question) trimmed = pitchContour(trimmed, rate, questionContour(question));
   const Offline = globalThis.OfflineAudioContext || globalThis.webkitOfflineAudioContext;
   if (!Offline) return { pcm: fade(normalizeLoudness(trimmed), rate), rate };
 
@@ -125,91 +125,149 @@ export async function studioMaster(pcm, rate, { question = null } = {}) {
 /** Pulizia leggera e trasparente: silenzi ai bordi, volume uniforme, niente click. */
 export function cleanVoice(pcm, rate, { question = null } = {}) {
   let voice = trimSilence(pcm, rate, 0.008, 40);
-  if (question) voice = pitchContour(voice, rate, { peak: questionRise(question) });
+  if (question) voice = pitchContour(voice, rate, questionContour(question));
   return { pcm: fade(normalizeLoudness(voice), rate), rate };
 }
 
 const WH_WORDS = /^[\s«“"'(—–-]*(chi|che cosa|cosa|che|come|dove|quando|perché|perche|quale|quali|quanto|quanta|quanti|quante)(?=[\s,?!.]|$)/i;
 
 /**
- * Intonazione della domanda italiana: la voce sale verso la fine. Più marcata nelle
- * domande sì/no («Siamo arrivati?»), più lieve in quelle con chi/come/dove/perché.
- * @returns {number} rapporto di altezza finale (1 = nessun cambiamento)
+ * Curva d'intonazione della domanda italiana, come rapporto di altezza lungo la frase
+ * (0 = inizio, 1 = fine). Domande sì/no («Siamo arrivati?»): voce invariata, piccola
+ * discesa sull'ultima parola e risalita finale. Domande con chi/come/dove/perché:
+ * attacco appena più alto e risalita lieve.
+ * @returns {(t: number) => number}
  */
-export function questionRise(text) {
-  return WH_WORDS.test(text) ? 1.1 : 1.22; // circa +1,6 e +3,5 semitoni
-}
-
-/**
- * Allunga il suono (fattore alpha > 1 = più lungo) senza cambiarne l'altezza (WSOLA:
- * ogni pezzo viene allineato a quello precedente per non creare battimenti).
- * Restituisce anche, per ogni campione prodotto, la posizione corrispondente nell'originale.
- */
-function wsolaStretch(x, rate, alphaAt) {
-  const n = x.length;
-  const N = Math.round(rate * 0.03) & ~1; // 30 ms
-  const hs = N / 2;
-  const tol = Math.round(rate * 0.008);
-  const win = Float32Array.from({ length: N }, (_, i) => 0.5 - 0.5 * Math.cos((2 * Math.PI * i) / N));
-  const cap = Math.ceil(n * 1.6) + N * 2;
-  const y = new Float32Array(cap);
-  const ypos = new Float32Array(cap);
-  let a = 0;
-  let prev = 0;
-  let k = 0;
-  for (; ; k++) {
-    const outStart = k * hs;
-    if (outStart + N >= cap) break;
-    let best = Math.round(a);
-    if (k > 0) {
-      const nat = prev + hs; // continuazione naturale del pezzo precedente
-      let bestScore = -Infinity;
-      for (let d = -tol; d <= tol; d++) {
-        const st = Math.round(a) + d;
-        if (st < 0 || st + N > n || nat + N > n) continue;
-        let sc = 0;
-        for (let i = 0; i < N; i += 2) sc += x[st + i] * x[nat + i];
-        if (sc > bestScore) { bestScore = sc; best = st; }
-      }
-    }
-    if (best + N > n) break;
-    for (let i = 0; i < N; i++) {
-      y[outStart + i] += x[best + i] * win[i];
-      ypos[outStart + i] = best + i;
-    }
-    prev = best;
-    a += hs / alphaAt(a / n);
+export function questionContour(text) {
+  const smooth = (a, b, t) => a + (b - a) * (0.5 - 0.5 * Math.cos(Math.PI * Math.min(1, Math.max(0, t))));
+  if (WH_WORDS.test(text)) {
+    return (t) => (t < 0.25 ? smooth(1.05, 1, t / 0.25) : t < 0.75 ? 1 : smooth(1, 1.08, (t - 0.75) / 0.22));
   }
-  const len = Math.min(cap, k * hs + hs);
-  return { y: y.subarray(0, len), ypos: ypos.subarray(0, len) };
+  return (t) => (t < 0.55 ? 1 : t < 0.72 ? smooth(1, 0.96, (t - 0.55) / 0.17) : smooth(0.96, 1.19, (t - 0.72) / 0.24));
+}
+
+/** Rapporto di altezza raggiunto alla fine della domanda. */
+export function questionRise(text) {
+  return questionContour(text)(1);
 }
 
 /**
- * Cambia l'altezza della voce lungo la frase senza cambiarne la durata: allunga il suono
- * della stessa misura (WSOLA) e poi lo ricampiona. L'altezza resta invariata fino a
- * `from` (frazione della frase), poi sale dolcemente fino a `peak`.
+ * Trova la frequenza della voce (periodo in campioni) a intervalli di 5 ms con il metodo YIN.
+ * 0 = tratto non vocalizzato (consonanti sorde, pause).
+ */
+export function trackPeriods(x, rate) {
+  const hop = Math.round(rate * 0.005);
+  const win = Math.round(rate * 0.03);
+  const minLag = Math.floor(rate / 420);
+  const maxLag = Math.ceil(rate / 65);
+  let peak = 0;
+  for (const v of x) peak = Math.max(peak, Math.abs(v));
+  const d = new Float32Array(maxLag + 1);
+  const periods = [];
+  for (let start = 0; start + win + maxLag < x.length; start += hop) {
+    let energy = 0;
+    for (let j = 0; j < win; j++) energy += x[start + j] * x[start + j];
+    if (Math.sqrt(energy / win) < peak * 0.04) { periods.push(0); continue; }
+    let running = 0;
+    let found = 0;
+    for (let lag = 1; lag <= maxLag; lag++) {
+      let sum = 0;
+      for (let j = 0; j < win; j++) { const diff = x[start + j] - x[start + j + lag]; sum += diff * diff; }
+      running += sum;
+      d[lag] = (sum * lag) / (running || 1);
+    }
+    let bestLag = 0;
+    for (let lag = minLag; lag < maxLag; lag++) {
+      if (d[lag] < 0.2 && d[lag] <= d[lag + 1]) { found = lag; break; }
+      if (!bestLag || d[lag] < d[bestLag]) bestLag = lag;
+    }
+    // nessun minimo netto: si accetta il migliore se abbastanza periodico
+    if (!found && bestLag && d[bestLag] < 0.35) found = bestLag;
+    periods.push(found);
+  }
+  return { hop, periods };
+}
+
+/**
+ * Cambia l'altezza della voce lungo la frase senza cambiarne né la durata né il timbro
+ * (TD-PSOLA): ogni vibrazione delle corde vocali viene ritagliata e riposizionata più
+ * vicina alle altre, quindi sale solo la nota, non le risonanze della bocca.
  * @param {Float32Array} pcm
  * @param {number} rate
- * @param {{ peak: number, from?: number }} contour
+ * @param {(t: number) => number} contour rapporto di altezza in funzione della posizione (0..1)
  */
-export function pitchContour(pcm, rate, { peak, from = 0.6 }) {
+export function pitchContour(pcm, rate, contour) {
   const n = pcm.length;
-  if (peak === 1 || n < rate * 0.15) return pcm;
-  const ratioAt = (t) => {
-    if (t <= from) return 1;
-    const k = Math.min(1, (t - from) / Math.max(0.05, 1 - from - 0.06));
-    return 1 + (peak - 1) * (0.5 - 0.5 * Math.cos(Math.PI * k)); // salita morbida
-  };
-  const { y, ypos } = wsolaStretch(pcm, rate, ratioAt);
-  const out = new Float32Array(n);
-  let j = 0;
-  for (let o = 0; o < n; o++) {
-    const j0 = Math.floor(j);
-    if (j0 + 1 >= y.length) break;
-    const f = j - j0;
-    out[o] = y[j0] * (1 - f) + y[j0 + 1] * f;
-    j += ratioAt(ypos[j0] / n); // lettura più veloce = voce più alta
+  if (n < rate * 0.15) return pcm;
+  // si lavora solo dove la curva si allontana da 1: il resto resta identico all'originale
+  let first = n;
+  for (let i = 0; i < n; i += Math.round(rate * 0.005)) if (Math.abs(contour(i / n) - 1) > 0.002) { first = i; break; }
+  if (first >= n) return pcm;
+  const fadeLen = Math.round(rate * 0.03);
+  const from = Math.max(0, first - Math.round(rate * 0.06));
+  const part = pcm.subarray(from);
+  const shifted = psola(part, rate, (t) => contour((from + t * part.length) / n));
+  const out = Float32Array.from(pcm);
+  for (let i = 0; i < part.length; i++) {
+    const k = Math.min(1, i / fadeLen);
+    out[from + i] = pcm[from + i] * (1 - k) + shifted[i] * k;
   }
+  return out;
+}
+
+// TD-PSOLA con segni di vibrazione allineati per somiglianza della forma d'onda
+function psola(x, rate, contour) {
+  const n = x.length;
+  const { hop, periods } = trackPeriods(x, rate);
+  const periodAt = (i) => periods[Math.min(periods.length - 1, Math.max(0, Math.round(i / hop)))] || 0;
+  const fallback = Math.round(rate * 0.005);
+  const marks = [];
+  let prev = -1;
+  for (let i = 0; i < n;) {
+    const T = periodAt(i);
+    if (!T) { marks.push({ at: i, T: fallback, voiced: false }); prev = -1; i += fallback; continue; }
+    let best = i;
+    if (prev >= 0 && i - prev < T * 1.5) {
+      // la vibrazione successiva è quella che somiglia di più alla precedente
+      let bestScore = -Infinity;
+      const half = Math.round(T / 2);
+      for (let c = prev + Math.round(T * 0.8); c <= prev + Math.round(T * 1.2); c++) {
+        if (c - half < 0 || c + half >= n) continue;
+        let sc = 0;
+        for (let k = -half; k < half; k++) sc += x[prev + k] * x[c + k];
+        if (sc > bestScore) { bestScore = sc; best = c; }
+      }
+    } else {
+      for (let j = i; j < Math.min(n, i + T); j++) if (Math.abs(x[j]) > Math.abs(x[best])) best = j;
+    }
+    if (best >= n) break;
+    marks.push({ at: best, T, voiced: true });
+    prev = best;
+    i = best + Math.max(1, Math.round(T * 0.9));
+  }
+  if (marks.length < 3) return x;
+
+  const out = new Float32Array(n);
+  const norm = new Float32Array(n);
+  let m = 0;
+  for (let t = marks[0].at; t < n;) {
+    while (m + 1 < marks.length && Math.abs(marks[m + 1].at - t) <= Math.abs(marks[m].at - t)) m++;
+    const { at, T, voiced } = marks[m];
+    const r = voiced ? contour(t / n) : 1;
+    const L = 2 * T;
+    for (let k = -T; k < T; k++) {
+      const src = at + k;
+      const dst = Math.round(t + k);
+      if (src < 0 || src >= n || dst < 0 || dst >= n) continue;
+      const w = 0.5 + 0.5 * Math.cos((Math.PI * 2 * k) / L);
+      out[dst] += x[src] * w;
+      norm[dst] += w;
+    }
+    // passo reale fino alla vibrazione successiva, accorciato del rapporto: nota più alta
+    const step = m + 1 < marks.length ? marks[m + 1].at - at : T;
+    t += voiced && marks[m + 1]?.voiced ? step / r : step;
+  }
+  for (let i = 0; i < n; i++) out[i] = norm[i] > 0.05 ? out[i] / norm[i] : x[i];
   return out;
 }
 
