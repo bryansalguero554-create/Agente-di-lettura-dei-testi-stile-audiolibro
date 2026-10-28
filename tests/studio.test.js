@@ -34,3 +34,30 @@ describe('voce da studio', () => {
     expect(piperProsody({ heading: true }).lengthScale).toBeGreaterThan(piperProsody({}).lengthScale);
   });
 });
+
+describe('intonazione delle domande', async () => {
+  const { pitchContour, questionRise } = await import('../src/engines/studio.js');
+  // frequenza stimata dai passaggi per lo zero in una finestra
+  const freq = (pcm, rate, from, to) => {
+    let z = 0;
+    for (let i = from + 1; i < to; i++) if ((pcm[i - 1] < 0) !== (pcm[i] < 0)) z++;
+    return (z / 2) / ((to - from) / rate);
+  };
+
+  it('alza la voce alla fine senza cambiare la durata', () => {
+    const rate = 22050;
+    const pcm = Float32Array.from({ length: rate }, (_, i) => 0.5 * Math.sin((2 * Math.PI * 200 * i) / rate));
+    const out = pitchContour(pcm, rate, { peak: 1.22 });
+    expect(out.length).toBe(pcm.length);
+    const start = freq(out, rate, 1000, 8000);
+    const end = freq(out, rate, rate - 3000, rate - 1200);
+    expect(start).toBeGreaterThan(190);
+    expect(start).toBeLessThan(210);
+    expect(end / start).toBeGreaterThan(1.15);
+  });
+
+  it('domande sì/no salgono più di quelle con chi/come/dove', () => {
+    expect(questionRise('«Siamo arrivati?»')).toBeGreaterThan(questionRise('Dove vai?'));
+    expect(questionRise('Perché sei qui?')).toBeLessThan(1.2);
+  });
+});

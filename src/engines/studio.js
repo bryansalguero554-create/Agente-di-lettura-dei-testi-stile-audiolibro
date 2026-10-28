@@ -67,8 +67,9 @@ function roomImpulse(ctx, seconds = 0.32) {
  * @param {number} rate
  * @returns {Promise<{ pcm: Float32Array, rate: number }>}
  */
-export async function studioMaster(pcm, rate) {
-  const trimmed = trimSilence(pcm, rate);
+export async function studioMaster(pcm, rate, { question = null } = {}) {
+  let trimmed = trimSilence(pcm, rate);
+  if (question) trimmed = pitchContour(trimmed, rate, { peak: questionRise(question) });
   const Offline = globalThis.OfflineAudioContext || globalThis.webkitOfflineAudioContext;
   if (!Offline) return { pcm: fade(normalizeLoudness(trimmed), rate), rate };
 
@@ -122,8 +123,94 @@ export async function studioMaster(pcm, rate) {
 }
 
 /** Pulizia leggera e trasparente: silenzi ai bordi, volume uniforme, niente click. */
-export function cleanVoice(pcm, rate) {
-  return { pcm: fade(normalizeLoudness(trimSilence(pcm, rate, 0.008, 40)), rate), rate };
+export function cleanVoice(pcm, rate, { question = null } = {}) {
+  let voice = trimSilence(pcm, rate, 0.008, 40);
+  if (question) voice = pitchContour(voice, rate, { peak: questionRise(question) });
+  return { pcm: fade(normalizeLoudness(voice), rate), rate };
+}
+
+const WH_WORDS = /^[\s«“"'(—–-]*(chi|che cosa|cosa|che|come|dove|quando|perché|perche|quale|quali|quanto|quanta|quanti|quante)(?=[\s,?!.]|$)/i;
+
+/**
+ * Intonazione della domanda italiana: la voce sale verso la fine. Più marcata nelle
+ * domande sì/no («Siamo arrivati?»), più lieve in quelle con chi/come/dove/perché.
+ * @returns {number} rapporto di altezza finale (1 = nessun cambiamento)
+ */
+export function questionRise(text) {
+  return WH_WORDS.test(text) ? 1.1 : 1.22; // circa +1,6 e +3,5 semitoni
+}
+
+/**
+ * Allunga il suono (fattore alpha > 1 = più lungo) senza cambiarne l'altezza (WSOLA:
+ * ogni pezzo viene allineato a quello precedente per non creare battimenti).
+ * Restituisce anche, per ogni campione prodotto, la posizione corrispondente nell'originale.
+ */
+function wsolaStretch(x, rate, alphaAt) {
+  const n = x.length;
+  const N = Math.round(rate * 0.03) & ~1; // 30 ms
+  const hs = N / 2;
+  const tol = Math.round(rate * 0.008);
+  const win = Float32Array.from({ length: N }, (_, i) => 0.5 - 0.5 * Math.cos((2 * Math.PI * i) / N));
+  const cap = Math.ceil(n * 1.6) + N * 2;
+  const y = new Float32Array(cap);
+  const ypos = new Float32Array(cap);
+  let a = 0;
+  let prev = 0;
+  let k = 0;
+  for (; ; k++) {
+    const outStart = k * hs;
+    if (outStart + N >= cap) break;
+    let best = Math.round(a);
+    if (k > 0) {
+      const nat = prev + hs; // continuazione naturale del pezzo precedente
+      let bestScore = -Infinity;
+      for (let d = -tol; d <= tol; d++) {
+        const st = Math.round(a) + d;
+        if (st < 0 || st + N > n || nat + N > n) continue;
+        let sc = 0;
+        for (let i = 0; i < N; i += 2) sc += x[st + i] * x[nat + i];
+        if (sc > bestScore) { bestScore = sc; best = st; }
+      }
+    }
+    if (best + N > n) break;
+    for (let i = 0; i < N; i++) {
+      y[outStart + i] += x[best + i] * win[i];
+      ypos[outStart + i] = best + i;
+    }
+    prev = best;
+    a += hs / alphaAt(a / n);
+  }
+  const len = Math.min(cap, k * hs + hs);
+  return { y: y.subarray(0, len), ypos: ypos.subarray(0, len) };
+}
+
+/**
+ * Cambia l'altezza della voce lungo la frase senza cambiarne la durata: allunga il suono
+ * della stessa misura (WSOLA) e poi lo ricampiona. L'altezza resta invariata fino a
+ * `from` (frazione della frase), poi sale dolcemente fino a `peak`.
+ * @param {Float32Array} pcm
+ * @param {number} rate
+ * @param {{ peak: number, from?: number }} contour
+ */
+export function pitchContour(pcm, rate, { peak, from = 0.6 }) {
+  const n = pcm.length;
+  if (peak === 1 || n < rate * 0.15) return pcm;
+  const ratioAt = (t) => {
+    if (t <= from) return 1;
+    const k = Math.min(1, (t - from) / Math.max(0.05, 1 - from - 0.06));
+    return 1 + (peak - 1) * (0.5 - 0.5 * Math.cos(Math.PI * k)); // salita morbida
+  };
+  const { y, ypos } = wsolaStretch(pcm, rate, ratioAt);
+  const out = new Float32Array(n);
+  let j = 0;
+  for (let o = 0; o < n; o++) {
+    const j0 = Math.floor(j);
+    if (j0 + 1 >= y.length) break;
+    const f = j - j0;
+    out[o] = y[j0] * (1 - f) + y[j0 + 1] * f;
+    j += ratioAt(ypos[j0] / n); // lettura più veloce = voce più alta
+  }
+  return out;
 }
 
 /** Float32 [-1, 1] → WAV 16 bit mono. */

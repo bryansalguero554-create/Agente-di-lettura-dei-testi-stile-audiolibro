@@ -119,3 +119,11 @@ describe('motori premium', () => {
     expect(elevenBody('x', { previousText: 'p' }, 'eleven_v3').previous_text).toBeUndefined();
   });
 });
+
+describe('tono delle battute', () => {
+  it('la domanda tra virgolette ha il tono di domanda anche se la frase finisce col punto', async () => {
+    const { speechUnits } = await import('../src/player.js');
+    const units = speechUnits({ text: '«Siamo arrivati?» chiese Lucia.', mood: 'statement', dialogue: 0.4 }, { dialogueVoice: true });
+    expect(units.map((u) => [u.text, u.mood])).toEqual([['«Siamo arrivati?»', 'question'], ['chiese Lucia.', 'statement']]);
+  });
+});

@@ -97,6 +97,8 @@ export class PiperEngine {
   kind = 'audio';
   id = 'piper';
   label = 'Voce neurale gratuita (offline)';
+  // battute e incisi letti separatamente, ciascuno con la propria intonazione
+  splitClauses = true;
   #sessions = new Map();
   onProgress = null;
   /** @param {() => { studio?: boolean, profile?: 'naturale' | 'standard' }} [getOptions] */
@@ -136,7 +138,9 @@ export class PiperEngine {
     const { studio = false, profile = 'naturale' } = this.getOptions();
     const { pcm, rate } = await session.call('synth', { text: line, opts: piperProsody(ctx, session.inference, profile) });
     // pulizia sempre attiva (silenzi ai bordi, volume uniforme); la rifinitura da studio è facoltativa
-    const out = studio ? await studioMaster(pcm, rate) : cleanVoice(pcm, rate);
+    // il modello non sa alzare la voce nelle domande: la curva la aggiungiamo noi
+    const question = ctx.mood === 'question' || /\?["»”')]*$/.test(line.trim()) ? line : null;
+    const out = studio ? await studioMaster(pcm, rate, { question }) : cleanVoice(pcm, rate, { question });
     return floatToWav(out.pcm, out.rate);
   }
 

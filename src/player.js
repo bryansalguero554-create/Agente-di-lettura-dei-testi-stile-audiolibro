@@ -2,7 +2,7 @@
 // successive, inserisce pause naturali e segnala la posizione per l'evidenziazione.
 
 import { normalizeForSpeech } from './text/normalize-it.js';
-import { splitQuoted } from './text/segment.js';
+import { splitQuoted, sentenceMood } from './text/segment.js';
 
 const PACE = { compatto: 0.6, naturale: 1, disteso: 1.45 };
 const PREFETCH = 3;
@@ -26,7 +26,8 @@ export function speechUnits(sentence, { dialogueVoice = false } = {}) {
   if (sentence.heading) return [{ ...base, text: sentence.text.replace(/[.:]?$/, '.'), dialogue: false }];
   if (dialogueVoice && sentence.dialogue > 0 && sentence.dialogue < 1) {
     const parts = splitQuoted(sentence.text, sentence.inQuote);
-    if (parts.length > 1) return parts.map((p) => ({ ...base, text: p.text, dialogue: p.dialogue }));
+    // ogni parte ha il suo tono: «Siamo arrivati?» è una domanda anche se la frase finisce col punto
+    if (parts.length > 1) return parts.map((p) => ({ ...base, text: p.text, dialogue: p.dialogue, mood: sentenceMood(p.text) }));
   }
   return [{ ...base, text: sentence.text, dialogue: sentence.dialogue >= 0.5 }];
 }
@@ -186,7 +187,7 @@ export class Player extends EventTarget {
     const s = this.book.chapters[chapter].sentences[index];
     // le voci di sistema non interpretano da sole le battute: separandole possiamo
     // cambiarne l'intonazione; i motori neurali invece capiscono il contesto della frase intera
-    const split = this.#settings().dialogueVoiceEnabled || this.#engine?.kind === 'speech';
+    const split = this.#settings().dialogueVoiceEnabled || this.#engine?.kind === 'speech' || this.#engine?.splitClauses;
     return speechUnits(s, { dialogueVoice: split }).map((u) => ({
       ...u,
       spoken: normalizeForSpeech(u.text),
