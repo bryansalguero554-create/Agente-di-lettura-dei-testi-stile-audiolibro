@@ -419,14 +419,15 @@ async function main() {
     const ctx2 = await browser.newContext();
     const p2 = await ctx2.newPage();
     await p2.goto(url);
-    // come nell'app con la voce offline: pagina isolata, motore su più processori
-    await p2.evaluate(async () => {
-      await navigator.serviceWorker.ready;
-      await (await caches.open('narratore-flags')).put('coi', new Response('1'));
-      (await navigator.serviceWorker.ready).active.postMessage({ type: 'coi', on: true });
-    });
+    // come nell'app: scegliendo la voce offline e chiudendo le impostazioni la pagina si
+    // ricarica "isolata" e il motore usa più processori
     await p2.waitForFunction(() => navigator.serviceWorker.controller);
-    await p2.reload();
+    await p2.click('[aria-label="Impostazioni"] >> nth=0');
+    await p2.locator('.engine', { hasText: 'Paola' }).click();
+    const reloaded = p2.waitForEvent('load', { timeout: 15000 });
+    await p2.keyboard.press('Escape');
+    await reloaded;
+    await p2.waitForFunction(() => window.__narratore);
     console.log(`      pagina isolata: ${await p2.evaluate(() => self.crossOriginIsolated)}, processori: ${await p2.evaluate(() => navigator.hardwareConcurrency)}`);
     const text = 'La casa apparve all\'improvviso dietro una curva, scura e silenziosa. «Siamo arrivati?» chiese Lucia. Il padre sorrise, senza voltarsi.';
     const dir = process.env.CAMPIONI_DIR || out;
