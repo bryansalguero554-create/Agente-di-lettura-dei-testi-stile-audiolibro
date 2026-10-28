@@ -79,7 +79,7 @@ describe('player', () => {
 
   it('pause più lunghe a fine paragrafo e prima dei capitoli', () => {
     const [h, a, b] = book.chapters[0].sentences;
-    expect(pauseAfter(a, b)).toBeGreaterThan(300);
+    expect(pauseAfter(a, b)).toBeGreaterThan(200);
     expect(pauseAfter(b, book.chapters[1].sentences[0])).toBeGreaterThan(pauseAfter(a, b));
     expect(pauseAfter(h, a, 'disteso')).toBeGreaterThan(pauseAfter(h, a, 'compatto'));
   });

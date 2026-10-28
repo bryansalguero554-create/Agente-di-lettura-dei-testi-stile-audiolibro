@@ -9,11 +9,12 @@ const PREFETCH = 3;
 
 /** Pausa (ms a velocità 1x) dopo una frase, in base a punteggiatura e struttura. */
 export function pauseAfter(sentence, next, pace = 'naturale') {
-  let ms = { statement: 380, question: 480, exclamation: 430, suspense: 750 }[sentence.mood] ?? 380;
-  if (sentence.heading) ms = 950;
-  if (next && next.paragraph !== sentence.paragraph) ms += 420;
+  // come nel parlato: respiro breve tra le frasi, un po' più lungo tra i paragrafi
+  let ms = { statement: 240, question: 320, exclamation: 290, suspense: 600 }[sentence.mood] ?? 240;
+  if (sentence.heading) ms = 900;
+  if (next && next.paragraph !== sentence.paragraph) ms += 330;
   if (next?.heading) ms += 600;
-  if (next && !sentence.heading && !next.heading && (next.dialogue >= 0.5) !== (sentence.dialogue >= 0.5)) ms += 150;
+  if (next && !sentence.heading && !next.heading && (next.dialogue >= 0.5) !== (sentence.dialogue >= 0.5)) ms += 120;
   return ms * (PACE[pace] ?? 1);
 }
 
@@ -262,7 +263,17 @@ export class Player extends EventTarget {
     }
   }
 
+  #restUntil = 0;
+
+  /** Completa la pausa tra le frasi, se la frase successiva è pronta prima che finisca. */
+  async #restEnd() {
+    const wait = this.#restUntil - performance.now();
+    this.#restUntil = 0;
+    if (wait > 0) await sleep(wait);
+  }
+
   async #loop(runId) {
+    this.#restUntil = 0;
     const alive = () => runId === this.#runId;
     while (alive()) {
       const { chapter } = this;
@@ -283,6 +294,8 @@ export class Player extends EventTarget {
             this.#prefetch(chapter, sentence);
             for (const [k, urlP] of urls.entries()) {
               const url = await urlP;
+              if (!alive()) return;
+              await this.#restEnd();
               if (!alive()) return;
               this.#setState('playing');
               const { weights } = units[k];
@@ -309,6 +322,8 @@ export class Player extends EventTarget {
               }
             }
           } else {
+            await this.#restEnd();
+            if (!alive()) return;
             this.#setState('playing');
             for (const u of units) {
               await this.#engine.speak(u.spoken, { ...this.#ctxFor(chapter, sentence, u), rate: this.rate, volume: this.volume });
@@ -327,8 +342,8 @@ export class Player extends EventTarget {
       const sentences = this.book.chapters[chapter].sentences;
       const atChapterEnd = sentence + 1 >= sentences.length;
       const nextSentence = atChapterEnd ? this.book.chapters[chapter + 1]?.sentences[0] : sentences[sentence + 1];
-      if (!skip) await sleep(pauseAfter(s, nextSentence, settings.pace) / this.rate);
-      if (!alive()) return;
+      // la pausa scorre mentre la frase successiva si prepara: non si sommano
+      if (!skip) this.#restUntil = performance.now() + pauseAfter(s, nextSentence, settings.pace) / this.rate;
 
       if (atChapterEnd) {
         if (chapter + 1 >= this.book.chapters.length) {

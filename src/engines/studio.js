@@ -9,11 +9,27 @@ const PEAK_LIMIT = 0.89; // -1 dBFS
 /** Toglie il silenzio all'inizio e alla fine, lasciando un respiro di pochi millisecondi. */
 export function trimSilence(pcm, rate, threshold = 0.012, keepMs = 25) {
   const keep = Math.round((rate * keepMs) / 1000);
+  // si ragiona su finestre di 10 ms: un singolo campione di rumore non ferma il taglio
+  const win = Math.max(1, Math.round(rate / 100));
+  let peak = 0;
+  for (const v of pcm) peak = Math.max(peak, Math.abs(v));
+  // il fruscio di coda delle voci neurali è relativo al volume della voce
+  const limit = Math.max(threshold, peak * 0.04);
+  const loud = (from) => {
+    let e = 0;
+    const to = Math.min(pcm.length, from + win);
+    for (let i = from; i < to; i++) e += pcm[i] * pcm[i];
+    return Math.sqrt(e / Math.max(1, to - from)) >= limit;
+  };
   let start = 0;
-  let end = pcm.length - 1;
-  while (start < pcm.length && Math.abs(pcm[start]) < threshold) start++;
-  while (end > start && Math.abs(pcm[end]) < threshold) end--;
+  while (start < pcm.length && !loud(start)) start += win;
+  let end = pcm.length - win;
+  while (end > start && !loud(end)) end -= win;
   if (start >= end) return pcm;
+  // dentro la finestra si cerca il punto esatto
+  end = Math.min(pcm.length - 1, end + win);
+  while (start < end && Math.abs(pcm[start]) < limit) start++;
+  while (end > start && Math.abs(pcm[end]) < limit) end--;
   return pcm.subarray(Math.max(0, start - keep), Math.min(pcm.length, end + keep + 1));
 }
 
