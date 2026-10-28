@@ -14,7 +14,7 @@ Narratore è un'app web che funziona nel browser di telefono, tablet e computer.
 | ✨ **Evidenziato sul documento** | La frase letta si illumina direttamente sulle pagine originali del PDF o sul Word con la sua formattazione, e la pagina scorre da sola. Tocca una frase per far ripartire la lettura da lì. Con il pulsante ☰ in alto passi alla vista di solo testo. |
 | ⏩ **Velocità** | Da 0,5× a 2× senza effetto «voce di cartone animato». |
 | 🌙 **Timer di spegnimento** | 5 minuti – 1 ora oppure «fine capitolo», con dissolvenza finale. In pausa il timer si ferma. |
-| 🎭 **Interpretazione espressiva** | Pause naturali (frase, paragrafo, capitolo), intonazione diversa per domande, esclamazioni, sospensioni e dialoghi; voce separata opzionale per le battute. |
+| 🎭 **Interpretazione espressiva** | Pause naturali (frase, paragrafo, capitolo); le domande salgono di tono come nell'italiano parlato; battute tra virgolette lette con il proprio tono; voce separata opzionale per i dialoghi. |
 | 🇮🇹 **Italiano corretto** | Legge bene abbreviazioni (*Sig.*, *Dott.ssa*, *ecc.*, *pag.*), numeri romani (*Luigi XIV*, *XIX secolo*, *Capitolo IV*), date (*12/03/2024*), orari, valute, percentuali, ordinali e numeri grandi. |
 | 📱 **App installabile** | Si aggiunge alla schermata Home (iPhone e Android), funziona offline e si controlla dalla schermata di blocco e dalle cuffie. |
 | 🔒 **Privato** | File, libreria e chiavi restano solo sul tuo dispositivo. |
@@ -29,7 +29,7 @@ Narratore offre cinque motori vocali (Impostazioni ⚙️ › *Motore vocale*). 
 | **Gemini 3.8 Flash TTS** (Google AI Studio) | ★★★★★ | piano gratuito con limiti | La voce più naturale: modello Gemini 3.8 diretto come un narratore italiano; legge un paragrafo per richiesta, con intonazione continua. |
 | **ElevenLabs** | ★★★★★ | a pagamento | La voce più realistica, quella delle app di audiolibri professionali. Scegli una voce italiana dalla Voice Library di ElevenLabs. |
 | **OpenAI** | ★★★★½ | a pagamento | Le chiediamo di leggere come un narratore italiano madrelingua e di recitare i dialoghi. |
-| **Paola** (neurale, offline) | ★★★½ | gratis | Voce neurale italiana che gira nel browser. Si scarica una volta (~64 MB), poi funziona senza internet. |
+| **Paola / Serena** (neurali, offline) | ★★★★ | gratis, senza limiti | Voci neurali italiane che girano nel browser, con regia "naturale" e vera intonazione delle domande (sale solo la nota, il timbro resta naturale). Si scaricano una volta (Paola ~64 MB, Serena ~114 MB in alta qualità), poi funzionano senza internet. Campioni in `/campioni/` del sito. |
 | **Voci del dispositivo** | da ★★ a ★★★★ | gratis | Dipende dal sistema: vedi sotto. |
 
 ### Voci gratuite migliori per ogni dispositivo
@@ -87,6 +87,9 @@ src/
     piper.js           voce neurale offline in un Web Worker
     cloud.js           Gemini, OpenAI, ElevenLabs (con chiave) e pulizia dell'audio
     puter.js           voci premium gratuite tramite Puter
+    piper.js           voci offline Paola e Serena (regia naturale)
+    piper.worker.js    sintesi neurale nel browser (ONNX + fonemizzatore)
+    studio.js          pulizia dell'audio e intonazione delle domande (TD-PSOLA)
   views/
     align.js           trova ogni frase nel testo del documento originale
     pdf-view.js        pagine del PDF con la frase evidenziata
