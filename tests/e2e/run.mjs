@@ -386,7 +386,12 @@ async function main() {
   await step('chiede il consenso al download e gestisce la rete non disponibile', async () => {
     await page.click('[aria-label="Impostazioni"] >> nth=1');
     await page.locator('.engine', { hasText: 'Paola' }).click();
+    // chiudendo le impostazioni l'app si ricarica una volta "isolata" (motore su più processori)
+    const reload = page.waitForEvent('load', { timeout: 15000 });
     await page.keyboard.press('Escape');
+    await reload;
+    await page.locator('#reader-view').waitFor();
+    assert(await page.evaluate(() => self.crossOriginIsolated), 'pagina non isolata con la voce offline');
     await page.click('#play-btn');
     await page.getByText('Scaricare la voce Paola?').waitFor();
     await page.screenshot({ path: join(out, '06-consenso-piper.png') });
@@ -414,6 +419,15 @@ async function main() {
     const ctx2 = await browser.newContext();
     const p2 = await ctx2.newPage();
     await p2.goto(url);
+    // come nell'app con la voce offline: pagina isolata, motore su più processori
+    await p2.evaluate(async () => {
+      await navigator.serviceWorker.ready;
+      await (await caches.open('narratore-flags')).put('coi', new Response('1'));
+      (await navigator.serviceWorker.ready).active.postMessage({ type: 'coi', on: true });
+    });
+    await p2.waitForFunction(() => navigator.serviceWorker.controller);
+    await p2.reload();
+    console.log(`      pagina isolata: ${await p2.evaluate(() => self.crossOriginIsolated)}, processori: ${await p2.evaluate(() => navigator.hardwareConcurrency)}`);
     const text = 'La casa apparve all\'improvviso dietro una curva, scura e silenziosa. «Siamo arrivati?» chiese Lucia. Il padre sorrise, senza voltarsi.';
     const dir = process.env.CAMPIONI_DIR || out;
     mkdirSync(dir, { recursive: true });

@@ -640,7 +640,36 @@ async function selectEngine(id) {
   player.setEngine(currentEngine());
   await renderVoiceControls();
   refreshVoiceLabel();
+  syncIsolation(false);
 }
+
+// Le voci offline vanno molto più veloci se la pagina è "isolata" (più processori insieme);
+// l'isolamento lo applica il service worker e serve un ricaricamento, una volta sola:
+// all'avvio o alla chiusura delle impostazioni, mai durante la lettura.
+async function syncIsolation(reload = true) {
+  if (!import.meta.env.PROD || !('serviceWorker' in navigator) || typeof caches === 'undefined') return;
+  const want = settings.engine === 'piper';
+  try {
+    await (await caches.open('narratore-flags')).put('coi', new Response(want ? '1' : '0'));
+  } catch {
+    return;
+  }
+  const sw = await navigator.serviceWorker.ready;
+  sw.active?.postMessage({ type: 'coi', on: want });
+  if (want === !!self.crossOriginIsolated) {
+    sessionStorage.removeItem(`coi-reload-${want}`);
+    return;
+  }
+  if (!reload || !navigator.serviceWorker.controller) return;
+  if (player.state === 'playing' || player.state === 'loading') return;
+  // evita ricaricamenti a catena se il browser non supporta l'isolamento
+  const key = `coi-reload-${want}`;
+  if (sessionStorage.getItem(key)) return;
+  sessionStorage.setItem(key, '1');
+  if (book) sessionStorage.setItem('reopen-book', book.id);
+  location.reload();
+}
+$('#settings-dialog').addEventListener('close', () => syncIsolation());
 
 function fillVoiceSelect(select, voices, selected) {
   select.innerHTML = '';
@@ -936,7 +965,12 @@ async function start() {
     toast(err.message || 'Non riesco ad aprire la libreria salvata.', 8000);
   }
   if (import.meta.env.PROD && 'serviceWorker' in navigator) {
-    navigator.serviceWorker.register('sw.js').catch(() => {});
+    navigator.serviceWorker.register('sw.js').then(syncIsolation).catch(() => {});
+  }
+  const reopen = sessionStorage.getItem('reopen-book');
+  if (reopen) {
+    sessionStorage.removeItem('reopen-book');
+    await openBook(reopen).catch(() => {});
   }
   // file condivisi verso l'app installata (File Handling API)
   if ('launchQueue' in window) {
