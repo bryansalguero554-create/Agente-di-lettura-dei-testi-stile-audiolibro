@@ -217,7 +217,9 @@ export class Player extends EventTarget {
     let c = chapter;
     let i = index;
     i = this.groupEnd(c, i);
-    for (let n = 0; n < PREFETCH; n++) {
+    // le voci offline preparano più frasi in anticipo: così i rallentamenti non si sentono
+    const depth = this.#engine.prefetch ?? PREFETCH;
+    for (let n = 0; n < depth; n++) {
       i++;
       if (i >= this.book.chapters[c].sentences.length) {
         c++;

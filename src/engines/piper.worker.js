@@ -67,16 +67,38 @@ async function init(voiceId, wasmPaths, modelUrl) {
   session = await ort.InferenceSession.create(model, { executionProviders: ['wasm'] });
 }
 
-function phonemize(text, espeakVoice = config?.espeak?.voice) {
-  return new Promise((resolve, reject) => {
-    createPiperPhonemize({
-      print: (data) => resolve(JSON.parse(data).phoneme_ids),
-      printErr: (message) => reject(new Error(message)),
-      locateFile: (file) => (file.endsWith('.wasm') ? paths.piperWasm : file.endsWith('.data') ? paths.piperData : file),
-    }).then((module) => {
-      module.callMain(['-l', espeakVoice, '--input', JSON.stringify([{ text }]), '--espeak_data', '/espeak-ng-data']);
-    }, reject);
+// Il fonemizzatore (espeak-ng, ~18 MB di dati) si carica una sola volta e si riusa:
+// ricrearlo a ogni frase costava centinaia di millisecondi e creava pause tra le frasi.
+let phonemizer = null;
+let waiting = null;
+
+function loadPhonemizer() {
+  phonemizer ??= createPiperPhonemize({
+    print: (data) => waiting?.resolve(JSON.parse(data).phoneme_ids),
+    printErr: (message) => waiting?.reject(new Error(message)),
+    locateFile: (file) => (file.endsWith('.wasm') ? paths.piperWasm : file.endsWith('.data') ? paths.piperData : file),
+  }).catch((err) => {
+    phonemizer = null;
+    throw err;
   });
+  return phonemizer;
+}
+
+async function phonemize(text, espeakVoice = config?.espeak?.voice, retry = true) {
+  const module = await loadPhonemizer();
+  try {
+    return await new Promise((resolve, reject) => {
+      waiting = { resolve, reject };
+      module.callMain(['-l', espeakVoice, '--input', JSON.stringify([{ text }]), '--espeak_data', '/espeak-ng-data']);
+    });
+  } catch (err) {
+    // se il modulo non accetta un'altra esecuzione se ne crea uno nuovo, una volta
+    if (!retry) throw err;
+    phonemizer = null;
+    return phonemize(text, espeakVoice, false);
+  } finally {
+    waiting = null;
+  }
 }
 
 /**
@@ -111,7 +133,15 @@ async function handle({ type, id, ...data }) {
   } else if (type === 'phonemes') {
     // controllo diagnostico: fonemizzazione senza bisogno del modello vocale
     paths = data.wasmPaths;
-    self.postMessage({ type: 'phonemes', id, ids: await phonemize(data.text, data.espeakVoice || 'it') });
+    const texts = Array.isArray(data.text) ? data.text : [data.text];
+    const times = [];
+    let ids;
+    for (const t of texts) {
+      const start = performance.now();
+      ids = await phonemize(t, data.espeakVoice || 'it');
+      times.push(Math.round(performance.now() - start));
+    }
+    self.postMessage({ type: 'phonemes', id, ids, times });
   } else if (type === 'flush') {
     await caches.delete(CACHE).catch(() => {});
     try {

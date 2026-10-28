@@ -99,6 +99,7 @@ export class PiperEngine {
   label = 'Voce neurale gratuita (offline)';
   // battute e incisi letti separatamente, ciascuno con la propria intonazione
   splitClauses = true;
+  prefetch = 6;
   #sessions = new Map();
   onProgress = null;
   /** @param {() => { studio?: boolean, profile?: 'naturale' | 'standard' }} [getOptions] */
@@ -148,7 +149,7 @@ export class PiperEngine {
   async phonemes(text) {
     const tmp = new PiperSession(null);
     try {
-      const { ids } = await tmp.call('phonemes', {
+      const { ids, times } = await tmp.call('phonemes', {
         text,
         wasmPaths: {
           onnxWasm: vendorUrl('ort/'),
@@ -156,7 +157,7 @@ export class PiperEngine {
           piperWasm: vendorUrl('piper/piper_phonemize.wasm'),
         },
       });
-      return ids;
+      return Array.isArray(text) ? { ids, times } : ids;
     } finally {
       tmp.dispose();
     }

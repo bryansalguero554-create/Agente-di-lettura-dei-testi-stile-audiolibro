@@ -429,7 +429,13 @@ async function main() {
             settings.piperProfile = profile;
             settings.piperStudio = false;
             const parts = [];
-            for (const s of sentences) parts.push(await engines.piper.synthesize(s, { voice: v, mood: /\?/.test(s) ? 'question' : 'statement' }));
+            let synthMs = 0;
+            for (const s of sentences) {
+              const t0 = performance.now();
+              parts.push(await engines.piper.synthesize(s, { voice: v, mood: /\?/.test(s) ? 'question' : 'statement' }));
+              synthMs += performance.now() - t0;
+            }
+            outByProfile[`${profile}-ms`] = Math.round(synthMs);
             // unisce le frasi con una pausa naturale di 0,45 s
             const ctx = new OfflineAudioContext(1, 1, 44100);
             const buffers = await Promise.all(parts.map(async (b) => ctx.decodeAudioData(await b.arrayBuffer())));
@@ -440,6 +446,7 @@ async function main() {
             let o = 0;
             for (const b of buffers) { pcm.set(b.getChannelData(0), o); o += b.length + gap; }
             outByProfile[profile] = await toB64(window.__narratore.floatToWav(pcm, rate));
+            outByProfile[`${profile}-audio`] = Math.round((total / rate) * 1000);
           }
           return outByProfile;
         }, { t: text, v: voice }).catch((err) => {
@@ -448,7 +455,10 @@ async function main() {
           return null;
         });
         if (!res) return;
-        for (const [profile, b64] of Object.entries(res)) {
+        // velocità: quanto tempo serve per generare un secondo di voce (sotto 1 = più veloce del parlato)
+        // si misura il secondo giro ("standard"): il primo include il download del modello
+        console.log(`      ${name}: generazione ${res['standard-ms']} ms per ${res['standard-audio']} ms di audio (fattore ${(res['standard-ms'] / res['standard-audio']).toFixed(2)})`);
+        for (const [profile, b64] of Object.entries(res).filter(([k]) => !k.includes('-'))) {
           const buf = Buffer.from(b64, 'base64');
           assert(buf.length > 50000, `${name} ${profile}: ${buf.length} byte`);
           writeFileSync(join(dir, `${name}-${profile}.wav`), buf);
