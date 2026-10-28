@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Campioni di Paola · Narratore</title>
+  <title>Campioni delle voci · Narratore</title>
   <style>
     :root { --bg: #f6f1e7; --fg: #2a231b; --muted: #7b6f60; --card: #fffaf1; --line: #e2d7c4; --accent: #b5562b; color-scheme: light; }
     @media (prefers-color-scheme: dark) { :root { --bg: #15120f; --fg: #ece3d4; --muted: #a39580; --card: #1f1a15; --line: #3a3127; --accent: #e3864f; color-scheme: dark; } }
@@ -16,24 +16,41 @@
     audio { width: 100%; }
     a { color: var(--accent); }
     blockquote { margin: 0; font-family: Georgia, serif; font-style: italic; }
+    .missing { display: none; }
   </style>
 </head>
 <body>
   <main>
-    <h1>Campioni di Paola</h1>
-    <p>Generati automaticamente con la vera voce neurale a ogni pubblicazione dell'app.</p>
+    <h1>Campioni delle voci offline</h1>
+    <p>Generati con le voci vere a ogni pubblicazione dell'app. Ascolta e dimmi quale suona più naturale.</p>
     <blockquote>«La casa apparve all'improvviso dietro una curva, scura e silenziosa. "Siamo arrivati?" chiese Lucia. Il padre sorrise, senza voltarsi.»</blockquote>
     <section>
-      <h2>Paola · voce da studio</h2>
-      <p>Ritmo da narratore, calore, niente asprezze, volume uniforme.</p>
-      <audio controls preload="none" src="paola-studio.wav"></audio>
+      <h2>1 · Paola · naturale</h2>
+      <p>Nuova regia: intonazione e ritmo più liberi, meno meccanici.</p>
+      <audio controls preload="none" src="paola-naturale.wav"></audio>
     </section>
     <section>
-      <h2>Paola · originale</h2>
-      <p>La voce così come esce dal modello, senza rifinitura.</p>
-      <audio controls preload="none" src="paola-originale.wav"></audio>
+      <h2>2 · Paola · standard</h2>
+      <p>I valori di fabbrica del modello.</p>
+      <audio controls preload="none" src="paola-standard.wav"></audio>
+    </section>
+    <section data-optional="serena-naturale.wav">
+      <h2>3 · Serena · naturale</h2>
+      <p>Nuova voce italiana ufficiale in alta qualità, con la nuova regia.</p>
+      <audio controls preload="none" src="serena-naturale.wav"></audio>
+    </section>
+    <section data-optional="serena-standard.wav">
+      <h2>4 · Serena · standard</h2>
+      <p>Serena con i valori di fabbrica.</p>
+      <audio controls preload="none" src="serena-standard.wav"></audio>
     </section>
     <p><a href="../">← Torna all'app</a></p>
   </main>
+  <script>
+    // nasconde i campioni non generati (voce non disponibile)
+    document.querySelectorAll('[data-optional]').forEach((s) => {
+      fetch(s.dataset.optional, { method: 'HEAD' }).then((r) => { if (!r.ok) s.classList.add('missing'); }, () => s.classList.add('missing'));
+    });
+  </script>
 </body>
 </html>

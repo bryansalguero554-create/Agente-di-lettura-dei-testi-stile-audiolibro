@@ -90,11 +90,9 @@ export async function studioMaster(pcm, rate) {
   };
   const chain = [
     filter('highpass', 70, 0, 0.7), // via rimbombi e fruscii bassi
-    filter('lowshelf', 190, 2.5), // calore e corpo
-    filter('peaking', 1100, -1.2, 0.9), // meno "nasale"
-    filter('peaking', 3600, -2.2, 1.4), // smussa la parte metallica tipica delle voci sintetiche
-    filter('peaking', 6800, -2.5, 2.2), // de-esser: sibilanti più morbide
-    filter('highshelf', 9500, -2), // meno fruscio
+    filter('lowshelf', 190, 1.5), // un po' di calore
+    filter('peaking', 3600, -1.5, 1.4), // smussa la parte metallica tipica delle voci sintetiche
+    filter('peaking', 6800, -1.5, 2.2), // sibilanti più morbide
   ];
   const comp = ctx.createDynamicsCompressor();
   comp.threshold.value = -24;
@@ -106,7 +104,7 @@ export async function studioMaster(pcm, rate) {
   const dry = ctx.createGain();
   dry.gain.value = 1;
   const wet = ctx.createGain();
-  wet.gain.value = 0.06; // un velo d'ambiente, non un'eco
+  wet.gain.value = 0;
   const reverb = ctx.createConvolver();
   reverb.normalize = true;
   reverb.buffer = roomImpulse(ctx);
@@ -115,11 +113,17 @@ export async function studioMaster(pcm, rate) {
   for (const f of chain) { node.connect(f); node = f; }
   node.connect(comp);
   comp.connect(dry).connect(ctx.destination);
-  comp.connect(reverb).connect(wet).connect(ctx.destination);
+  // il riverbero rende la voce meno naturale: resta disponibile ma spento
+  if (wet.gain.value > 0) comp.connect(reverb).connect(wet).connect(ctx.destination);
   src.start();
   const rendered = await ctx.startRendering();
   const out = trimSilence(rendered.getChannelData(0), OUT_RATE, 0.004, 60);
   return { pcm: fade(normalizeLoudness(Float32Array.from(out)), OUT_RATE), rate: OUT_RATE };
+}
+
+/** Pulizia leggera e trasparente: silenzi ai bordi, volume uniforme, niente click. */
+export function cleanVoice(pcm, rate) {
+  return { pcm: fade(normalizeLoudness(trimSilence(pcm, rate, 0.008, 40)), rate), rate };
 }
 
 /** Float32 [-1, 1] → WAV 16 bit mono. */

@@ -1,24 +1,39 @@
 // Motore neurale gratuito e offline (Piper) che gira interamente nel browser.
 // Ogni voce ha il proprio worker, così narratore e voce dei dialoghi restano caricati insieme.
 
-import { studioMaster, floatToWav } from './studio.js';
+import { studioMaster, cleanVoice, floatToWav } from './studio.js';
 
 /**
- * Regia di Paola: ritmo da narratore un po' più disteso e intonazione più viva nelle
- * domande e nelle esclamazioni (noise = variazione espressiva, noiseW = variazione del ritmo).
+ * Regia della voce. Il profilo "naturale" dà al modello un po' più di libertà
+ * nell'intonazione (noiseScale) e nel ritmo (noiseW) rispetto ai valori di fabbrica,
+ * che suonano piatti e meccanici; "standard" usa i valori del modello.
+ * @param {{ mood?: string, heading?: boolean, dialogue?: boolean }} ctx
+ * @param {{ noise_scale?: number, length_scale?: number, noise_w?: number }} [base] valori del modello
+ * @param {'naturale' | 'standard'} [profile]
  */
-export function piperProsody(ctx = {}) {
-  const p = { lengthScale: 1.06, noiseScale: 0.6, noiseW: 0.72 };
-  if (ctx.heading) Object.assign(p, { lengthScale: 1.14, noiseScale: 0.5 });
-  if (ctx.mood === 'question') Object.assign(p, { noiseScale: 0.7, noiseW: 0.8 });
-  if (ctx.mood === 'exclamation') Object.assign(p, { noiseScale: 0.74, lengthScale: 1.0 });
-  if (ctx.mood === 'suspense') Object.assign(p, { lengthScale: 1.12 });
-  if (ctx.dialogue) p.noiseScale += 0.05;
+export function piperProsody(ctx = {}, base = {}, profile = 'naturale') {
+  const noise = base.noise_scale ?? 0.667;
+  const length = base.length_scale ?? 1;
+  const noiseW = base.noise_w ?? 0.8;
+  if (profile === 'standard') return { lengthScale: length, noiseScale: noise, noiseW };
+  const p = { lengthScale: length * 1.02, noiseScale: noise * 1.12, noiseW: noiseW * 1.12 };
+  if (ctx.heading) Object.assign(p, { lengthScale: length * 1.1, noiseScale: noise });
+  if (ctx.mood === 'question' || ctx.mood === 'exclamation') p.noiseScale = noise * 1.2;
+  if (ctx.mood === 'suspense') p.lengthScale = length * 1.08;
+  if (ctx.dialogue) p.noiseScale += 0.03;
   return p;
 }
 
 export const PIPER_VOICES = [
   { id: 'it_IT-paola-medium', label: 'Paola', badge: 'Neurale', size: 63.5, hint: 'Femminile, calda e chiara' },
+  {
+    id: 'it_IT-serena-high',
+    label: 'Serena',
+    badge: 'Neurale alta qualità',
+    size: 114,
+    hint: 'Femminile, la più recente voce italiana ufficiale, in alta qualità',
+    url: 'https://huggingface.co/rhasspy/piper-voices/resolve/main/it/it_IT/serena/high/it_IT-serena-high.onnx',
+  },
   { id: 'it_IT-riccardo-x_low', label: 'Riccardo', badge: 'Neurale leggera', size: 28.1, hint: 'Maschile, più leggera ma meno definita' },
 ];
 
@@ -49,6 +64,7 @@ class PiperSession {
     this.ready = voiceId
       ? this.call('init', {
         voiceId,
+        modelUrl: PIPER_VOICES.find((v) => v.id === voiceId)?.url,
         wasmPaths: {
           onnxWasm: vendorUrl('ort/'),
           piperData: vendorUrl('piper/piper_phonemize.data'),
@@ -83,7 +99,7 @@ export class PiperEngine {
   label = 'Voce neurale gratuita (offline)';
   #sessions = new Map();
   onProgress = null;
-  /** @param {() => { studio?: boolean }} [getOptions] */
+  /** @param {() => { studio?: boolean, profile?: 'naturale' | 'standard' }} [getOptions] */
   constructor(getOptions = () => ({})) { this.getOptions = getOptions; }
 
   async voices() {
@@ -107,15 +123,20 @@ export class PiperEngine {
         throw new Error(`Non riesco a caricare la voce neurale (${err.message}). Controlla la connessione e riprova.`);
       });
     }
-    return session.ready.then(() => session);
+    return session.ready.then((info) => {
+      session.inference ??= info?.inference || {};
+      return session;
+    });
   }
 
   async synthesize(text, ctx = {}) {
     const session = await this.prepare(ctx.voice);
     // il modello intona meglio se la frase finisce con la punteggiatura
     const line = /[.!?…:;]["»”')]*$/.test(text.trim()) ? text : `${text.trim()}.`;
-    const { pcm, rate } = await session.call('synth', { text: line, opts: piperProsody(ctx) });
-    const out = this.getOptions().studio === false ? { pcm, rate } : await studioMaster(pcm, rate);
+    const { studio = false, profile = 'naturale' } = this.getOptions();
+    const { pcm, rate } = await session.call('synth', { text: line, opts: piperProsody(ctx, session.inference, profile) });
+    // pulizia sempre attiva (silenzi ai bordi, volume uniforme); la rifinitura da studio è facoltativa
+    const out = studio ? await studioMaster(pcm, rate) : cleanVoice(pcm, rate);
     return floatToWav(out.pcm, out.rate);
   }
 

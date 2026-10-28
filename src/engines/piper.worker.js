@@ -54,14 +54,14 @@ async function fetchCached(url, onProgress) {
   return bytes;
 }
 
-async function init(voiceId, wasmPaths) {
+async function init(voiceId, wasmPaths, modelUrl) {
   paths = wasmPaths;
   ort = ortModule.default || ortModule;
   ort.env.wasm.wasmPaths = paths.onnxWasm;
   ort.env.wasm.numThreads = self.crossOriginIsolated ? Math.min(4, navigator.hardwareConcurrency || 1) : 1;
-  const path = PATH_MAP[voiceId];
-  if (!path) throw new Error(`voce sconosciuta: ${voiceId}`);
-  const url = `${HF_BASE}/${path}`;
+  // le voci più recenti hanno un indirizzo proprio, le altre stanno nell'archivio della libreria
+  const url = modelUrl || (PATH_MAP[voiceId] && `${HF_BASE}/${PATH_MAP[voiceId]}`);
+  if (!url) throw new Error(`voce sconosciuta: ${voiceId}`);
   config = JSON.parse(new TextDecoder().decode(await fetchCached(`${url}.json`)));
   const model = await fetchCached(url, (loaded, total) => self.postMessage({ type: 'progress', loaded, total }));
   session = await ort.InferenceSession.create(model, { executionProviders: ['wasm'] });
@@ -103,8 +103,8 @@ async function synth(text, opts) {
 
 async function handle({ type, id, ...data }) {
   if (type === 'init') {
-    await init(data.voiceId, data.wasmPaths);
-    self.postMessage({ type: 'ready', id });
+    await init(data.voiceId, data.wasmPaths, data.modelUrl);
+    self.postMessage({ type: 'ready', id, inference: config.inference || {} });
   } else if (type === 'synth') {
     const { pcm, rate } = await synth(data.text, data.opts || {});
     self.postMessage({ type: 'audio', id, pcm, rate }, [pcm.buffer]);

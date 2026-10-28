@@ -18,7 +18,8 @@ export const DEFAULTS = {
   elevenModel: 'eleven_multilingual_v2',
   geminiModel: 'gemini-3.8-flash-tts',
   piperConsent: false,
-  piperStudio: true, // rifinitura "da studio" della voce Paola
+  piperStudio: false, // rifinitura "da studio" facoltativa: di base la voce resta naturale
+  piperProfile: 'naturale',
 };
 
 export function loadSettings() {
@@ -28,6 +29,8 @@ export function loadSettings() {
     if (saved.geminiModel === 'gemini-3.1-flash-tts-preview') saved.geminiModel = DEFAULTS.geminiModel;
     // il motore Google Cloud è stato tolto: Gemini lo sostituisce
     if (saved.engine === 'google') saved.engine = 'gemini';
+    // la rifinitura da studio era attiva di base: ora la voce parte naturale
+    if (!saved.voiceV2) { saved.piperStudio = false; saved.voiceV2 = true; }
     return { ...DEFAULTS, ...saved, keys: { ...DEFAULTS.keys, ...saved.keys } };
   } catch {
     return structuredClone(DEFAULTS);

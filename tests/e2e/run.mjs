@@ -414,25 +414,47 @@ async function main() {
     const ctx2 = await browser.newContext();
     const p2 = await ctx2.newPage();
     await p2.goto(url);
-    await step('Paola genera la voce vera, con e senza rifinitura da studio', async () => {
-      const text = 'La casa apparve all\'improvviso dietro una curva, scura e silenziosa. «Siamo arrivati?» chiese Lucia. Il padre sorrise, senza voltarsi.';
-      const res = await p2.evaluate(async (t) => {
-        const { engines, settings } = window.__narratore;
-        const toB64 = (blob) => new Promise((r) => { const fr = new FileReader(); fr.onload = () => r(fr.result.split(',')[1]); fr.readAsDataURL(blob); });
-        settings.piperStudio = true;
-        const studio = await engines.piper.synthesize(t, {});
-        settings.piperStudio = false;
-        const raw = await engines.piper.synthesize(t, {});
-        return { studio: await toB64(studio), raw: await toB64(raw) };
-      }, text);
-      const studio = Buffer.from(res.studio, 'base64');
-      const raw = Buffer.from(res.raw, 'base64');
-      assert(studio.length > 100000 && raw.length > 50000, `dimensioni: ${studio.length} / ${raw.length}`);
-      const dir = process.env.CAMPIONI_DIR || out;
-      mkdirSync(dir, { recursive: true });
-      writeFileSync(join(dir, 'paola-studio.wav'), studio);
-      writeFileSync(join(dir, 'paola-originale.wav'), raw);
-    });
+    const text = 'La casa apparve all\'improvviso dietro una curva, scura e silenziosa. «Siamo arrivati?» chiese Lucia. Il padre sorrise, senza voltarsi.';
+    const dir = process.env.CAMPIONI_DIR || out;
+    mkdirSync(dir, { recursive: true });
+    // per ogni voce: profilo naturale (nuovo) e standard (valori di fabbrica)
+    for (const [voice, name, required] of [['it_IT-paola-medium', 'paola', true], ['it_IT-serena-high', 'serena', false]]) {
+      await step(`${name}: voce vera, profilo naturale e standard`, async () => {
+        const res = await p2.evaluate(async ({ t, v }) => {
+          const { engines, settings } = window.__narratore;
+          const toB64 = (blob) => new Promise((r) => { const fr = new FileReader(); fr.onload = () => r(fr.result.split(',')[1]); fr.readAsDataURL(blob); });
+          const sentences = t.match(/[^.!?]+[.!?»]+/g).map((x) => x.trim());
+          const outByProfile = {};
+          for (const profile of ['naturale', 'standard']) {
+            settings.piperProfile = profile;
+            settings.piperStudio = false;
+            const parts = [];
+            for (const s of sentences) parts.push(await engines.piper.synthesize(s, { voice: v, mood: /\?/.test(s) ? 'question' : 'statement' }));
+            // unisce le frasi con una pausa naturale di 0,45 s
+            const ctx = new OfflineAudioContext(1, 1, 44100);
+            const buffers = await Promise.all(parts.map(async (b) => ctx.decodeAudioData(await b.arrayBuffer())));
+            const rate = buffers[0].sampleRate;
+            const gap = Math.round(rate * 0.45);
+            const total = buffers.reduce((n, b) => n + b.length + gap, 0);
+            const pcm = new Float32Array(total);
+            let o = 0;
+            for (const b of buffers) { pcm.set(b.getChannelData(0), o); o += b.length + gap; }
+            outByProfile[profile] = await toB64(window.__narratore.floatToWav(pcm, rate));
+          }
+          return outByProfile;
+        }, { t: text, v: voice }).catch((err) => {
+          if (required) throw err;
+          console.log(`      (${name} non disponibile: ${String(err.message).split('\n')[0]})`);
+          return null;
+        });
+        if (!res) return;
+        for (const [profile, b64] of Object.entries(res)) {
+          const buf = Buffer.from(b64, 'base64');
+          assert(buf.length > 50000, `${name} ${profile}: ${buf.length} byte`);
+          writeFileSync(join(dir, `${name}-${profile}.wav`), buf);
+        }
+      });
+    }
     await ctx2.close();
   }
 

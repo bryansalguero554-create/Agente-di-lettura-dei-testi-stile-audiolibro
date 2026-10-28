@@ -9,6 +9,7 @@ import { PiperEngine, PIPER_VOICES } from './engines/piper.js';
 import { PuterEngine } from './engines/puter.js';
 import { OpenAIEngine, ElevenLabsEngine, GeminiEngine, ELEVEN_MODELS, GEMINI_MODELS } from './engines/cloud.js';
 import { normalizeForSpeech } from './text/normalize-it.js';
+import { floatToWav } from './engines/studio.js';
 
 const $ = (sel) => document.querySelector(sel);
 const CHARS_PER_MINUTE = 950; // ritmo medio di un narratore italiano a 1×
@@ -21,7 +22,7 @@ const persist = () => saveSettings(settings);
 const engines = {
   device: new WebSpeechEngine(),
   puter: new PuterEngine(),
-  piper: new PiperEngine(() => ({ studio: settings.piperStudio !== false })),
+  piper: new PiperEngine(() => ({ studio: !!settings.piperStudio, profile: settings.piperProfile || 'naturale' })),
   openai: new OpenAIEngine(() => settings.keys.openai),
   elevenlabs: new ElevenLabsEngine(() => settings.keys.elevenlabs, () => settings.elevenModel),
   gemini: new GeminiEngine(() => settings.keys.gemini, () => settings.geminiModel),
@@ -691,7 +692,7 @@ async function renderVoiceControls() {
   fillVoiceSelect(dlgSel, voices, dialogueDefault);
   $('#voice-hint').textContent = voices.find((v) => v.id === selected)?.hint || '';
   $('#studio-row').hidden = engine.id !== 'piper';
-  $('#studio-toggle').checked = settings.piperStudio !== false;
+  $('#studio-toggle').checked = !!settings.piperStudio;
   $('#dialogue-row').hidden = !settings.dialogueVoiceEnabled;
 }
 
@@ -949,4 +950,4 @@ async function start() {
 start();
 
 // esposto per i test automatici
-window.__narratore = { player, settings, engines, timer, get docView() { return docView; } };
+window.__narratore = { player, settings, engines, timer, floatToWav, get docView() { return docView; } };
